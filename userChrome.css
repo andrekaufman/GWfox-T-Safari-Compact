@@ -137,7 +137,7 @@
 #tabbrowser-tabbox {
   box-shadow: none !important;
   outline: none !important;
-:root:not([inDOMFullscreen], [chromehidden~="toolbar"], [chromehidden~="location"]) & {
+:root:not([inDOMFullscreen], [popup-window]) & {
   backdrop-filter: blur(0);
 }
 }
@@ -2278,11 +2278,15 @@ tree {
 }
 }
 
-:root#main-window[chromehidden~="toolbar"] {
+:root#main-window[popup-window] {
   min-width: unset !important;
 
 .browser-toolbar {
   display: none !important;
+}
+
+.dialogStack {
+  margin-top: 10px !important;
 }
 }
 }
