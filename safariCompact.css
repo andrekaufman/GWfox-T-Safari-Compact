@@ -258,3 +258,98 @@
   opacity: 0 !important;
   visibility: hidden !important;
 }
+
+/* Single native leading glyph slot. */
+#urlbar.safari-v8-moving.safari-v8-visible .searchmode-switcher {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible #trust-icon-container {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transition: none !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible #trust-icon-container::before,
+#urlbar.safari-v8-moving.safari-v8-visible #trust-icon-container::after {
+  display: none !important;
+  content: none !important;
+  background-image: none !important;
+  list-style-image: none !important;
+  mask-image: none !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible #trust-icon {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: auto !important;
+  padding: 0 !important;
+  transition: opacity 90ms ease-out, scale 120ms cubic-bezier(.2,.8,.2,1) !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible,
+#urlbar.safari-v8-moving.safari-v8-visible[focused],
+#urlbar.safari-v8-moving.safari-v8-visible[open],
+#urlbar.safari-v8-moving.safari-v8-visible[usertyping] {
+  background-image: none !important;
+}
+
+#urlbar.safari-v8-exact-close-hover #trust-icon {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  scale: .86 !important;
+}
+
+/* Translation actions are omitted from the compact address overlay. */
+#urlbar.safari-v8-moving.safari-v8-visible :is(
+  #translations-button,
+  #translations-button-circle-arrows,
+  #translations-button-locale
+) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+
+/*
+ * Safari Compact's native glyph slot already identifies the page.
+ * Suppress Firefox's separate identity indicator, including about:
+ * pages, to avoid a globe or information symbol beside the favicon.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  :is(
+    #identity-box,
+    #identity-permission-box,
+    #notification-popup-box
+  ) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Preserve native favicon colors in the repurposed trust-icon slot. */
+#urlbar.safari-v8-moving.safari-v8-visible
+  #trust-icon {
+  -moz-context-properties: none !important;
+  fill: initial !important;
+  fill-opacity: initial !important;
+  filter: none !important;
+  color: initial !important;
+}

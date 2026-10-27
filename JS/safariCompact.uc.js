@@ -25,8 +25,20 @@
   closeButton.setAttribute("aria-label", "Stäng flik");
   document.documentElement.appendChild(closeButton);
 
+  const inputContainer = urlbar.querySelector(".urlbar-input-container");
+  const glyphSlot = document.querySelector("#trust-icon-container");
+  const glyph = document.querySelector("#trust-icon");
+
+  if (!inputContainer || !glyphSlot || !glyph) {
+    closeButton.remove();
+    return;
+  }
+
   let visible = false;
   let closeHover = false;
+  let glyphFrame = 0;
+  let glyphObserver = null;
+  let newTabFocusTimer = 0;
   let frame = 0;
   let settleTimer = 0;
   let resizeObserver = null;
@@ -159,11 +171,83 @@
     }
   }
 
+  const searchGlyph =
+    "chrome://global/skin/icons/search-glass.svg";
+
+  function selectedSuggestionGlyph() {
+    const row =
+      document.querySelector(".urlbarView-row[selected]") ||
+      document.querySelector(".urlbarView-row[aria-selected='true']");
+
+    return row?.querySelector(".urlbarView-favicon")
+      ?.getAttribute("src") || "";
+  }
+
+  function selectedTabGlyph() {
+    const tab = selectedTab();
+    if (!tab) return "";
+
+    return (
+      (typeof gBrowser.getIcon === "function"
+        ? gBrowser.getIcon(tab)
+        : "") ||
+      tab.image ||
+      tab.getAttribute("image") ||
+      tab.querySelector(".tab-icon-image")?.getAttribute("src") ||
+      ""
+    );
+  }
+
+  function applyGlyph(source) {
+    glyph.style.setProperty(
+      "list-style-image",
+      `url("${source || searchGlyph}")`,
+      "important"
+    );
+  }
+
+  function updateGlyph() {
+    cancelAnimationFrame(glyphFrame);
+
+    if (!visible || !urlbar.classList.contains("safari-v8-visible")) {
+      return;
+    }
+
+    const suggestion = selectedSuggestionGlyph();
+    const pageState = inputContainer.getAttribute("pageproxystate") || "";
+    const wholeValueSelected =
+      input.value.length > 0 &&
+      input.selectionStart === 0 &&
+      input.selectionEnd === input.value.length;
+
+    if (suggestion) {
+      applyGlyph(suggestion);
+    } else if (pageState === "valid" || wholeValueSelected) {
+      applyGlyph(selectedTabGlyph() || searchGlyph);
+    } else {
+      applyGlyph(searchGlyph);
+    }
+
+    queueMicrotask(() => {
+      if (visible) {
+        const lateSuggestion = selectedSuggestionGlyph();
+        if (lateSuggestion) applyGlyph(lateSuggestion);
+      }
+    });
+
+    glyphFrame = requestAnimationFrame(() => {
+      if (!visible) return;
+      const lateSuggestion = selectedSuggestionGlyph();
+      if (lateSuggestion) applyGlyph(lateSuggestion);
+    });
+  }
+
   function render() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       positionUrlbar();
       applyPush();
+      updateGlyph();
       if (closeHover) positionCloseButton();
     });
   }
@@ -174,9 +258,28 @@
     settleTimer = setTimeout(render, 120);
   }
 
+  function revealSelectedAddressFromStart() {
+    input.scrollLeft = 0;
+
+    requestAnimationFrame(() => {
+      input.scrollLeft = 0;
+      setTimeout(() => {
+        input.scrollLeft = 0;
+      }, 0);
+    });
+  }
+
   function openUrlbar() {
     const tab = selectedTab();
     if (!tab) return;
+
+    if (visible) {
+      gURLBar.focus();
+      gURLBar.select();
+      revealSelectedAddressFromStart();
+      updateGlyph();
+      return;
+    }
 
     // Prepare every visual state before focus can trigger Firefox painting.
     tab.classList.add("safari-v8-address");
@@ -187,6 +290,8 @@
     requestAnimationFrame(() => {
       gURLBar.focus();
       gURLBar.select();
+      revealSelectedAddressFromStart();
+      updateGlyph();
       positionUrlbar();
       applyPush();
     });
@@ -280,11 +385,27 @@
     }
   }
 
-  const layoutEvents = ["TabOpen", "TabClose", "TabMove", "TabPinned", "TabUnpinned"];
+  function onTabOpen(event) {
+    clearTimeout(newTabFocusTimer);
+    settle();
+
+    newTabFocusTimer = setTimeout(() => {
+      if (
+        event.target === gBrowser.selectedTab &&
+        !event.target.closing &&
+        !event.target.hidden
+      ) {
+        openUrlbar();
+      }
+    }, 80);
+  }
+
+  const layoutEvents = ["TabClose", "TabMove", "TabPinned", "TabUnpinned"];
 
   urlbar.classList.add("safari-v8-moving");
   tabs.addEventListener("pointerdown", onTabPointerDown, true);
   tabs.addEventListener("TabSelect", onTabSelect);
+  tabs.addEventListener("TabOpen", onTabOpen);
   layoutEvents.forEach(name => tabs.addEventListener(name, settle));
   document.addEventListener("focusin", onFocusIn, true);
   document.addEventListener("focusout", onFocusOut, true);
@@ -295,15 +416,40 @@
   closeButton.addEventListener("mousedown", blockClosePress, true);
   closeButton.addEventListener("click", closeSelectedTab, true);
 
+  glyphObserver = new MutationObserver(updateGlyph);
+
+  const urlbarView = document.querySelector(".urlbarView");
+  if (urlbarView) {
+    glyphObserver.observe(urlbarView, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["selected", "aria-selected", "src"]
+    });
+  }
+
+  input.addEventListener("input", updateGlyph, true);
+  input.addEventListener("select", updateGlyph, true);
+  input.addEventListener("focus", updateGlyph, true);
+  tabs.addEventListener("TabAttrModified", updateGlyph);
+
   resizeObserver = new ResizeObserver(render);
   resizeObserver.observe(toolbar);
 
   window.__safariCompactCleanup = () => {
     cancelAnimationFrame(frame);
+    cancelAnimationFrame(glyphFrame);
     clearTimeout(settleTimer);
+    clearTimeout(newTabFocusTimer);
     resizeObserver?.disconnect();
+    glyphObserver?.disconnect();
     tabs.removeEventListener("pointerdown", onTabPointerDown, true);
     tabs.removeEventListener("TabSelect", onTabSelect);
+    tabs.removeEventListener("TabOpen", onTabOpen);
+    tabs.removeEventListener("TabAttrModified", updateGlyph);
+    input.removeEventListener("input", updateGlyph, true);
+    input.removeEventListener("select", updateGlyph, true);
+    input.removeEventListener("focus", updateGlyph, true);
     layoutEvents.forEach(name => tabs.removeEventListener(name, settle));
     document.removeEventListener("focusin", onFocusIn, true);
     document.removeEventListener("focusout", onFocusOut, true);
@@ -318,6 +464,7 @@
     urlbar.classList.remove("safari-v8-moving", "safari-v8-visible", "safari-v8-exact-close-hover");
     ["--safari-v8-left", "--safari-v8-top", "--safari-v8-width", "--safari-v8-height", "--safari-v8-expand"]
       .forEach(property => urlbar.style.removeProperty(property));
+    glyph.style.removeProperty("list-style-image");
     closeButton.remove();
     delete window.__safariCompactCleanup;
   };
