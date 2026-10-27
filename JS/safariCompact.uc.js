@@ -39,6 +39,7 @@
   let glyphFrame = 0;
   let glyphObserver = null;
   let newTabFocusTimer = 0;
+  let newTabOpening = false;
   let frame = 0;
   let settleTimer = 0;
   let resizeObserver = null;
@@ -174,7 +175,14 @@
   const searchGlyph =
     "chrome://global/skin/icons/search-glass.svg";
 
+  function isBlankNewTab(tab = selectedTab()) {
+    const spec = tab?.linkedBrowser?.currentURI?.spec || "";
+    return spec === "about:newtab" || spec === "about:home" || spec === "about:blank";
+  }
+
   function selectedSuggestionGlyph() {
+    if (isBlankNewTab() && input.value.length === 0) return "";
+
     const row =
       document.querySelector(".urlbarView-row[selected]") ||
       document.querySelector(".urlbarView-row[aria-selected='true']");
@@ -206,40 +214,32 @@
     );
   }
 
-  function updateGlyph() {
-    cancelAnimationFrame(glyphFrame);
-
-    if (!visible || !urlbar.classList.contains("safari-v8-visible")) {
-      return;
-    }
+  function resolveGlyph() {
+    if (isBlankNewTab() && input.value.length === 0) return searchGlyph;
 
     const suggestion = selectedSuggestionGlyph();
+    if (suggestion) return suggestion;
+
     const pageState = inputContainer.getAttribute("pageproxystate") || "";
     const wholeValueSelected =
       input.value.length > 0 &&
       input.selectionStart === 0 &&
       input.selectionEnd === input.value.length;
 
-    if (suggestion) {
-      applyGlyph(suggestion);
-    } else if (pageState === "valid" || wholeValueSelected) {
-      applyGlyph(selectedTabGlyph() || searchGlyph);
-    } else {
-      applyGlyph(searchGlyph);
+    if (pageState === "valid" || wholeValueSelected) {
+      return selectedTabGlyph() || searchGlyph;
     }
 
-    queueMicrotask(() => {
-      if (visible) {
-        const lateSuggestion = selectedSuggestionGlyph();
-        if (lateSuggestion) applyGlyph(lateSuggestion);
-      }
-    });
+    return searchGlyph;
+  }
 
-    glyphFrame = requestAnimationFrame(() => {
-      if (!visible) return;
-      const lateSuggestion = selectedSuggestionGlyph();
-      if (lateSuggestion) applyGlyph(lateSuggestion);
-    });
+  function updateGlyph() {
+    cancelAnimationFrame(glyphFrame);
+    if (!visible || !urlbar.classList.contains("safari-v8-visible")) return;
+
+    applyGlyph(resolveGlyph());
+    queueMicrotask(() => { if (visible) applyGlyph(resolveGlyph()); });
+    glyphFrame = requestAnimationFrame(() => { if (visible) applyGlyph(resolveGlyph()); });
   }
 
   function render() {
@@ -372,6 +372,8 @@
 
   function onFocusOut() {
     requestAnimationFrame(() => {
+      if (newTabOpening) return;
+
       const focused = document.activeElement;
       if (focused !== input && !urlbar.contains(focused)) closeUrlbar();
     });
@@ -385,18 +387,64 @@
     }
   }
 
+  function playNewTabEntrance() {
+    urlbar.classList.remove("safari-v8-newtab-enter");
+    void urlbar.getBoundingClientRect();
+    urlbar.classList.add("safari-v8-newtab-enter");
+  }
+
+  function onNewTabAnimationEnd(event) {
+    if (event.animationName === "safari-v8-newtab-content-in") {
+      urlbar.classList.remove("safari-v8-newtab-enter");
+    }
+  }
+
   function onTabOpen(event) {
     clearTimeout(newTabFocusTimer);
-    settle();
+    const openedTab = event.target;
+    newTabOpening = true;
 
+    /*
+     * TabOpen and TabSelect complete in the same event turn. Queue the
+     * complete visual transaction as a microtask so the ordinary
+     * "New Tab" face is replaced before the browser paints a frame.
+     */
+    queueMicrotask(() => {
+      if (
+        openedTab !== gBrowser.selectedTab ||
+        openedTab.closing ||
+        openedTab.hidden
+      ) {
+        newTabOpening = false;
+        return;
+      }
+
+      openUrlbar();
+      updateGlyph();
+
+      if (isBlankNewTab(openedTab)) {
+        applyGlyph(searchGlyph);
+        playNewTabEntrance();
+      }
+    });
+
+    /*
+     * Firefox performs a late native focus transfer. Re-assert only
+     * focus and selection afterwards; the visual state is already live.
+     */
     newTabFocusTimer = setTimeout(() => {
       if (
-        event.target === gBrowser.selectedTab &&
-        !event.target.closing &&
-        !event.target.hidden
+        openedTab === gBrowser.selectedTab &&
+        !openedTab.closing &&
+        !openedTab.hidden
       ) {
-        openUrlbar();
+        gURLBar.focus();
+        gURLBar.select();
+        revealSelectedAddressFromStart();
+        updateGlyph();
       }
+
+      newTabOpening = false;
     }, 80);
   }
 
@@ -406,6 +454,7 @@
   tabs.addEventListener("pointerdown", onTabPointerDown, true);
   tabs.addEventListener("TabSelect", onTabSelect);
   tabs.addEventListener("TabOpen", onTabOpen);
+  urlbar.addEventListener("animationend", onNewTabAnimationEnd);
   layoutEvents.forEach(name => tabs.addEventListener(name, settle));
   document.addEventListener("focusin", onFocusIn, true);
   document.addEventListener("focusout", onFocusOut, true);
@@ -441,11 +490,13 @@
     cancelAnimationFrame(glyphFrame);
     clearTimeout(settleTimer);
     clearTimeout(newTabFocusTimer);
+    newTabOpening = false;
     resizeObserver?.disconnect();
     glyphObserver?.disconnect();
     tabs.removeEventListener("pointerdown", onTabPointerDown, true);
     tabs.removeEventListener("TabSelect", onTabSelect);
     tabs.removeEventListener("TabOpen", onTabOpen);
+    urlbar.removeEventListener("animationend", onNewTabAnimationEnd);
     tabs.removeEventListener("TabAttrModified", updateGlyph);
     input.removeEventListener("input", updateGlyph, true);
     input.removeEventListener("select", updateGlyph, true);
@@ -461,7 +512,10 @@
     closeButton.removeEventListener("click", closeSelectedTab, true);
     closeUrlbar();
     clearAddressState();
-    urlbar.classList.remove("safari-v8-moving", "safari-v8-visible", "safari-v8-exact-close-hover");
+    urlbar.classList.remove(
+      "safari-v8-moving", "safari-v8-visible",
+      "safari-v8-exact-close-hover", "safari-v8-newtab-enter"
+    );
     ["--safari-v8-left", "--safari-v8-top", "--safari-v8-width", "--safari-v8-height", "--safari-v8-expand"]
       .forEach(property => urlbar.style.removeProperty(property));
     glyph.style.removeProperty("list-style-image");

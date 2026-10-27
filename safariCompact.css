@@ -353,3 +353,50 @@
   filter: none !important;
   color: initial !important;
 }
+
+/* Safari-like Back/Forward motion using GWfox-T's existing geometry. */
+#nav-bar #back-button {
+  transition: min-width 190ms cubic-bezier(.2,.8,.2,1), max-width 190ms cubic-bezier(.2,.8,.2,1), width 190ms cubic-bezier(.2,.8,.2,1), background-color 150ms ease-out, box-shadow 150ms ease-out !important;
+}
+#nav-bar #back-button > .toolbarbutton-icon {
+  transition: margin-inline-start 190ms cubic-bezier(.2,.8,.2,1), opacity 120ms ease-out, scale 190ms cubic-bezier(.2,.8,.2,1) !important;
+}
+#nav-bar #forward-button {
+  transition: opacity 120ms ease-out, scale 190ms cubic-bezier(.2,.8,.2,1), display 190ms allow-discrete !important;
+  transition-behavior: allow-discrete !important;
+  transform-origin: center !important;
+}
+#nav-bar #forward-button:not([disabled]) { opacity: 1 !important; scale: 1 !important; }
+#nav-bar #forward-button[disabled] { opacity: 0 !important; scale: .78 !important; }
+
+/* One-shot new-tab entrance; no observer and no feedback loop. */
+#urlbar.safari-v8-newtab-enter > #urlbar-background {
+  animation: safari-v8-newtab-background-in 190ms cubic-bezier(.2,.8,.2,1) both !important;
+}
+#urlbar.safari-v8-newtab-enter > .urlbar-input-container {
+  animation: safari-v8-newtab-content-in 190ms cubic-bezier(.2,.8,.2,1) both !important;
+}
+#urlbar.safari-v8-newtab-enter #trust-icon {
+  animation: safari-v8-newtab-glyph-in 165ms 25ms cubic-bezier(.2,.8,.2,1) both !important;
+}
+@keyframes safari-v8-newtab-background-in {
+  from { opacity: .48; scale: .97 .93; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes safari-v8-newtab-content-in {
+  from { opacity: 0; translate: -4px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes safari-v8-newtab-glyph-in {
+  from { opacity: 0; scale: .76; }
+  to { opacity: 1; scale: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #nav-bar #back-button,
+  #nav-bar #back-button > .toolbarbutton-icon,
+  #nav-bar #forward-button { transition: none !important; }
+  #urlbar.safari-v8-newtab-enter > #urlbar-background,
+  #urlbar.safari-v8-newtab-enter > .urlbar-input-container,
+  #urlbar.safari-v8-newtab-enter #trust-icon { animation: none !important; }
+}
+
