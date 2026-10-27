@@ -1,0 +1,410 @@
+/* ===== safari-compact-v8 ===== */
+
+    #urlbar-container,
+    #urlbar-container:has(
+      #urlbar:is(:hover, [focused], [open]),
+      .urlbar-page-action[open],
+      .identity-box-button[open],
+      #notification-popup-box[open],
+      #trust-icon-container[open]
+    ) {
+      width: 36px !important;
+      min-width: 36px !important;
+      max-width: 36px !important;
+      flex: 0 0 36px !important;
+      transition: none !important;
+    }
+
+    #urlbar.safari-v8-moving,
+    #urlbar.safari-v8-moving[focused],
+    #urlbar.safari-v8-moving[open],
+    #urlbar.safari-v8-moving[usertyping],
+    #urlbar.safari-v8-moving[breakout],
+    #urlbar.safari-v8-moving[breakout-extend] {
+      position: fixed !important;
+
+      left: var(--safari-v8-left) !important;
+      top: var(--safari-v8-top) !important;
+
+      width: var(--safari-v8-width) !important;
+      min-width: var(--safari-v8-width) !important;
+      max-width: var(--safari-v8-width) !important;
+
+      height: var(--safari-v8-height) !important;
+      min-height: var(--safari-v8-height) !important;
+      max-height: var(--safari-v8-height) !important;
+
+      margin: 0 !important;
+      transform: none !important;
+      scale: 1 !important;
+      animation: none !important;
+      box-sizing: border-box !important;
+
+      z-index: 1000 !important;
+    }
+
+    #urlbar.safari-v8-moving:not(.safari-v8-visible) {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      transition: none !important;
+    }
+
+    #urlbar.safari-v8-moving.safari-v8-visible {
+      opacity: 1 !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
+      transition: opacity 80ms ease !important;
+    }
+
+    #urlbar.safari-v8-moving > #urlbar-background {
+      inset: 0 !important;
+      width: auto !important;
+      height: auto !important;
+      transform: none !important;
+    }
+
+    #urlbar.safari-v8-moving > .urlbar-input-container {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+
+      height: 100% !important;
+      min-height: 0 !important;
+      max-height: 100% !important;
+
+      box-sizing: border-box !important;
+      transform: none !important;
+    }
+
+    #urlbar.safari-v8-moving .urlbar-input {
+      mask-image: none !important;
+    }
+
+    .tabbrowser-tab.safari-v8-address > .tab-stack {
+      visibility: hidden !important;
+    }
+  
+
+/* ===== safari-compact-v8-close-fix ===== */
+
+    .tabbrowser-tab.safari-v8-address
+      .tab-close-button {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    .tabbrowser-tab.safari-v8-address
+      .tab-icon-stack,
+    .tabbrowser-tab.safari-v8-address
+      .tab-label-container,
+    .tabbrowser-tab.safari-v8-address
+      .tab-secondary-label {
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+  
+
+/* ===== safari-v8-subtle-animation ===== */
+
+    #urlbar.safari-v8-moving {
+      transition:
+        opacity 110ms ease-out !important;
+    }
+
+    #urlbar.safari-v8-moving.safari-v8-visible {
+      opacity: 1 !important;
+    }
+
+    #urlbar.safari-v8-moving:not(.safari-v8-visible) {
+      opacity: 0 !important;
+    }
+  
+
+/* ===== safari-compact-v8-push-v4 ===== */
+
+    #urlbar.safari-v8-moving,
+    #urlbar.safari-v8-moving[focused],
+    #urlbar.safari-v8-moving[open],
+    #urlbar.safari-v8-moving[usertyping],
+    #urlbar.safari-v8-moving[breakout],
+    #urlbar.safari-v8-moving[breakout-extend],
+    #urlbar.safari-v8-moving.safari-v8-visible {
+      width: calc(
+        var(--safari-v8-width) +
+        var(--safari-v8-expand, 0px)
+      ) !important;
+
+      min-width: calc(
+        var(--safari-v8-width) +
+        var(--safari-v8-expand, 0px)
+      ) !important;
+
+      max-width: calc(
+        var(--safari-v8-width) +
+        var(--safari-v8-expand, 0px)
+      ) !important;
+
+      transition:
+        width 150ms cubic-bezier(.2, .8, .2, 1),
+        opacity 90ms ease-out
+        !important;
+    }
+
+    .tabbrowser-tab.safari-v8-pushed,
+    #tabs-newtab-button.safari-v8-pushed,
+    #new-tab-button.safari-v8-pushed {
+      transform:
+        translateX(var(--safari-v8-push, 0px))
+        !important;
+
+      transition:
+        transform 150ms cubic-bezier(.2, .8, .2, 1)
+        !important;
+    }
+  
+
+/* ===== safari-compact-v8-sticky-fix ===== */
+
+    @media -moz-pref("gwt.oneliner") {
+      #tabbrowser-tabs[orient="horizontal"]
+        .tabbrowser-tab[selected],
+
+      #tabbrowser-tabs[orient="horizontal"]
+        .tabbrowser-tab[visuallyselected] {
+        position: relative !important;
+
+        left: auto !important;
+        right: auto !important;
+
+        inset-inline-start: auto !important;
+        inset-inline-end: auto !important;
+
+        translate: none !important;
+      }
+    }
+  
+
+/* ===== safari-v8-exact-close-style ===== */
+
+    #safari-v8-exact-close {
+      appearance: none !important;
+      -moz-default-appearance: none !important;
+
+      position: fixed !important;
+      left: var(--close-left) !important;
+      top: var(--close-top) !important;
+
+      display: block !important;
+
+      width: 16.5px !important;
+      height: 16.5px !important;
+      min-width: 16.5px !important;
+      min-height: 16.5px !important;
+      max-width: 16.5px !important;
+      max-height: 16.5px !important;
+
+      box-sizing: border-box !important;
+
+      margin: 0 !important;
+      padding: 3px !important;
+      border: 0 !important;
+      border-radius: 50% !important;
+
+      list-style-image:
+        url("resource://content-accessible/close-12.svg")
+        !important;
+
+      -moz-context-properties:
+        fill,
+        fill-opacity !important;
+
+      fill: rgb(21, 20, 26) !important;
+      fill-opacity: 1 !important;
+
+      color: rgb(21, 20, 26) !important;
+      background-color: transparent !important;
+
+      opacity: 0 !important;
+      visibility: hidden !important;
+
+      pointer-events: none !important;
+      cursor: default !important;
+
+      z-index: 2147483647 !important;
+
+      transform: none !important;
+      scale: 1 !important;
+
+      transition:
+        opacity 90ms ease-out,
+        background-color 90ms ease-out
+        !important;
+    }
+
+    #safari-v8-exact-close.visible {
+      opacity: 1 !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
+    }
+
+    #safari-v8-exact-close.visible:hover {
+      background-color:
+        color-mix(
+          in srgb,
+          currentColor 10%,
+          transparent
+        ) !important;
+    }
+
+    /*
+     * Ny flik: förstoringsglaset är bakgrundsbild på #urlbar.
+     */
+    #urlbar.safari-v8-exact-close-hover {
+      background-image: none !important;
+    }
+
+    /*
+     * Laddad webbsida: skölden är #trust-icon.
+     */
+    #urlbar.safari-v8-exact-close-hover
+      #trust-icon {
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+
+    /*
+     * Ändra inte URL-textens padding, marginal eller bredd.
+     */
+    #urlbar.safari-v8-exact-close-hover
+      .urlbar-input,
+    #urlbar.safari-v8-exact-close-hover
+      .urlbar-input-box {
+      margin-inline-start: 0 !important;
+      padding-inline-start: 0 !important;
+    }
+  
+
+/* ===== safari-v8-exact-close-visual-fix ===== */
+
+    /*
+     * list-style-image fungerar inte tillförlitligt när toolbarbutton
+     * flyttas ut ur sin normala tab-content. Rita därför samma
+     * Firefox-SVG som vanlig bakgrund i stället.
+     */
+    #safari-v8-exact-close {
+      list-style-image: none !important;
+
+      background-image:
+        url("resource://content-accessible/close-12.svg")
+        !important;
+
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 10.5px 10.5px !important;
+
+      -moz-context-properties:
+        fill,
+        fill-opacity !important;
+
+      fill: rgb(21, 20, 26) !important;
+      fill-opacity: 1 !important;
+    }
+
+    /*
+     * Originalets diskreta hoverbakgrund utan att ersätta SVG-bilden.
+     * Separata background-egenskaper används så att ikonen ligger kvar.
+     */
+    #safari-v8-exact-close.visible:hover {
+      background-color:
+        color-mix(
+          in srgb,
+          rgb(21, 20, 26) 10%,
+          transparent
+        ) !important;
+
+      background-image:
+        url("resource://content-accessible/close-12.svg")
+        !important;
+
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 10.5px 10.5px !important;
+    }
+
+    /*
+     * GWfox-T målar förstoringsglaset som bakgrund på #urlbar.
+     * Täck samtliga Firefox-tillstånd med samma specificitet som
+     * temats egna regler.
+     */
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover,
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover[focused],
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover[open],
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover[usertyping],
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover[breakout],
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover[breakout-extend] {
+      background-image: none !important;
+    }
+
+    /*
+     * Webbsida: dölj trust-ikonen i samma hoverläge.
+     */
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover
+      #trust-icon,
+    #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover
+      #trust-icon-container {
+      opacity: 0 !important;
+      visibility: hidden !important;
+    }
+  
+
+/* ===== safari-v8-exact-close-mask ===== */
+
+    #safari-v8-exact-close {
+      /*
+       * Täck sökglyphen/skölden bakom knappen helt.
+       * Färgen motsvarar den ljusgrå hovercirkeln hos
+       * GWfox-T:s vanliga stängningsknapp.
+       */
+      background-color: rgb(226, 226, 228) !important;
+
+      background-image:
+        url("resource://content-accessible/close-12.svg")
+        !important;
+
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 10.5px 10.5px !important;
+
+      border-radius: 50% !important;
+
+      /*
+       * Gör masken tillräckligt stor för att täcka den
+       * underliggande 16 px-glyphen, men inte större än
+       * originalets visuella hoverområde.
+       */
+      width: 18px !important;
+      height: 18px !important;
+      min-width: 18px !important;
+      min-height: 18px !important;
+      max-width: 18px !important;
+      max-height: 18px !important;
+
+      padding: 3.75px !important;
+
+      box-shadow: none !important;
+    }
+
+    #safari-v8-exact-close.visible:hover {
+      background-color: rgb(211, 211, 214) !important;
+
+      background-image:
+        url("resource://content-accessible/close-12.svg")
+        !important;
+
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 10.5px 10.5px !important;
+    }
