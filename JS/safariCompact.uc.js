@@ -33,6 +33,11 @@
   reloadButton.setAttribute("aria-label", "Ladda om sida");
   document.documentElement.appendChild(reloadButton);
 
+  const shelfProbe = document.createElement("div");
+  shelfProbe.id = "safari-v8-shelf-geometry-probe";
+  shelfProbe.setAttribute("aria-hidden", "true");
+  document.documentElement.appendChild(shelfProbe);
+
   const inputContainer = urlbar.querySelector(".urlbar-input-container");
   const glyphSlot = document.querySelector("#trust-icon-container");
   const glyph = document.querySelector("#trust-icon");
@@ -52,6 +57,8 @@
   let frame = 0;
   let settleTimer = 0;
   let resizeObserver = null;
+  let shelfProbeAnimationFrame = 0;
+  let shelfProbeAnimationToken = 0;
   const shifted = new Set();
 
   const preferredExpansion = 36;
@@ -256,11 +263,76 @@
     glyphFrame = requestAnimationFrame(() => { if (visible) applyGlyph(resolveGlyph()); });
   }
 
+  function positionShelfGeometryProbe() {
+    const normalTabs = [...tabs.querySelectorAll(
+      ".tabbrowser-tab:not([pinned], [hidden])"
+    )].filter(tab => {
+      const rect = tab.getBoundingClientRect();
+      return !tab.closing && rect.width > 0 && rect.height > 0;
+    });
+
+    if (!normalTabs.length) {
+      shelfProbe.classList.remove("visible");
+      return;
+    }
+
+    const firstBackground = normalTabs[0]
+      .querySelector(".tab-background")?.getBoundingClientRect();
+    const lastBackground = normalTabs.at(-1)
+      .querySelector(".tab-background")?.getBoundingClientRect();
+    const plus = plusButton();
+    const plusRect = plus?.getBoundingClientRect();
+    const urlRect = visible ? urlbar.getBoundingClientRect() : null;
+
+    if (!firstBackground || !lastBackground) {
+      shelfProbe.classList.remove("visible");
+      return;
+    }
+
+    const left = Math.min(firstBackground.left, urlRect?.left ?? Infinity);
+    const desiredRight = Math.max(lastBackground.right, urlRect?.right ?? -Infinity);
+    const rightLimit = plusRect && plusRect.width > 0
+      ? plusRect.left - 8
+      : desiredRight;
+    const right = Math.min(desiredRight, rightLimit);
+    const top = Math.min(firstBackground.top, urlRect?.top ?? Infinity);
+    const bottom = Math.max(firstBackground.bottom, urlRect?.bottom ?? -Infinity);
+
+    shelfProbe.style.setProperty("--probe-left", `${left}px`);
+    shelfProbe.style.setProperty("--probe-top", `${top}px`);
+    shelfProbe.style.setProperty("--probe-width", `${Math.max(1, right - left)}px`);
+    shelfProbe.style.setProperty("--probe-height", `${Math.max(1, bottom - top)}px`);
+    shelfProbe.classList.toggle("address-mode", visible);
+    shelfProbe.classList.add("visible");
+  }
+
+  function followShelfGeometryAnimation(duration = 210) {
+    const token = ++shelfProbeAnimationToken;
+    const started = performance.now();
+    cancelAnimationFrame(shelfProbeAnimationFrame);
+
+    const tick = now => {
+      if (token !== shelfProbeAnimationToken) return;
+      positionShelfGeometryProbe();
+
+      if (now - started < duration) {
+        shelfProbeAnimationFrame = requestAnimationFrame(tick);
+      } else {
+        shelfProbeAnimationFrame = 0;
+        positionShelfGeometryProbe();
+      }
+    };
+
+    shelfProbeAnimationFrame = requestAnimationFrame(tick);
+  }
+
   function render() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       positionUrlbar();
       applyPush();
+      positionShelfGeometryProbe();
+      followShelfGeometryAnimation();
       updateGlyph();
       if (closeHover) positionCloseButton();
       if (reloadHover) positionReloadButton();
@@ -315,6 +387,8 @@
   function closeUrlbar() {
     setVisible(false);
     clearPush();
+    positionShelfGeometryProbe();
+    followShelfGeometryAnimation();
   }
 
   function positionCloseButton() {
@@ -589,6 +663,8 @@
     cancelAnimationFrame(glyphFrame);
     clearTimeout(settleTimer);
     clearTimeout(newTabFocusTimer);
+    shelfProbeAnimationToken += 1;
+    cancelAnimationFrame(shelfProbeAnimationFrame);
     newTabOpening = false;
     resizeObserver?.disconnect();
     glyphObserver?.disconnect();
@@ -623,6 +699,7 @@
     glyph.style.removeProperty("list-style-image");
     closeButton.remove();
     reloadButton.remove();
+    shelfProbe.remove();
     delete window.__safariCompactCleanup;
   };
 

@@ -941,3 +941,82 @@
 }
 
 /* ===== SAFARI EIGHT-SPOKE BUSY INDICATOR END ===== */
+
+/*
+ * Final Safari-style connected tab shelf.
+ *
+ * Geometry is supplied by the verified frame-following probe logic.
+ * This layer is decorative only and sits behind Firefox's real tabs,
+ * URL overlay, controls and hit targets.
+ */
+#safari-v8-shelf-geometry-probe {
+  position: fixed !important;
+  left: var(--probe-left) !important;
+  top: var(--probe-top) !important;
+  width: var(--probe-width) !important;
+  height: var(--probe-height) !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid light-dark(
+    rgba(60, 60, 67, .10),
+    rgba(255, 255, 255, .10)
+  ) !important;
+  border-radius: 999px !important;
+  background: var(--safari-v8-inactive-tab) !important;
+  box-shadow: inset 0 1px 0 light-dark(
+    rgba(255, 255, 255, .22),
+    rgba(255, 255, 255, .05)
+  ) !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+#safari-v8-shelf-geometry-probe.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/*
+ * Inactive tabs expose the one-piece shelf. Selected tabs, direct
+ * hover pills and the real URL overlay retain their existing materials.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address,
+    :hover
+  )
+  > .tab-stack
+  > .tab-background {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Keep real tab/UI surfaces above the decorative shelf. */
+#tabbrowser-tabs[orient="horizontal"] .tabbrowser-tab,
+#tabbrowser-tabs[orient="horizontal"] #tabbrowser-arrowscrollbox-periphery,
+#tabbrowser-tabs[orient="horizontal"] :is(
+  #tabs-newtab-button,
+  #new-tab-button
+) {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* Safari-like quieter material when the Firefox window is inactive. */
+:root:-moz-window-inactive #safari-v8-shelf-geometry-probe {
+  background: light-dark(
+    rgba(130, 130, 134, .10),
+    rgba(255, 255, 255, .07)
+  ) !important;
+  border-color: light-dark(
+    rgba(60, 60, 67, .07),
+    rgba(255, 255, 255, .07)
+  ) !important;
+}
+
