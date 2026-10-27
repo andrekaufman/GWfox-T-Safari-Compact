@@ -463,3 +463,481 @@
   }
 }
 
+
+/* ===== SAFARI EXISTING TAB MATERIAL TEST START ===== */
+
+:root {
+  --safari-v8-inactive-tab:
+    light-dark(
+      rgba(90, 90, 94, .13),
+      rgba(255, 255, 255, .10)
+    );
+
+  --safari-v8-inactive-tab-hover:
+    light-dark(
+      rgba(72, 72, 74, .22),
+      rgba(255, 255, 255, .17)
+    );
+
+  --safari-v8-active-tab:
+    light-dark(
+      rgba(255, 255, 255, .96),
+      rgba(112, 112, 116, .72)
+    );
+}
+
+/*
+ * Only inactive tabs receive the neutral grey material.
+ * Existing Firefox/GWfox-T geometry remains untouched.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  )
+  > .tab-stack
+  > .tab-background {
+  background:
+    var(--safari-v8-inactive-tab)
+    !important;
+}
+
+/* Darker pill on direct inactive-tab hover. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  ):hover
+  > .tab-stack
+  > .tab-background {
+  background:
+    var(--safari-v8-inactive-tab-hover)
+    !important;
+}
+
+/* Active tab uses its existing pill geometry with a white material. */
+:root:not(:has(#urlbar.safari-v8-visible))
+  #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:is(
+    [selected],
+    [visuallyselected]
+  )
+  > .tab-stack
+  > .tab-background {
+  background:
+    var(--safari-v8-active-tab)
+    !important;
+}
+
+/*
+ * Address mode remains fully owned by the proven URL overlay.
+ * Never paint tab material underneath it.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-address
+  > .tab-stack
+  > .tab-background {
+  background:
+    transparent
+    !important;
+
+  box-shadow:
+    none
+    !important;
+}
+
+:root:-moz-window-inactive {
+  --safari-v8-inactive-tab:
+    light-dark(
+      rgba(130, 130, 134, .10),
+      rgba(255, 255, 255, .07)
+    );
+
+  --safari-v8-active-tab:
+    light-dark(
+      rgba(255, 255, 255, .56),
+      rgba(120, 120, 124, .38)
+    );
+}
+
+/* ===== SAFARI EXISTING TAB MATERIAL TEST END ===== */
+
+/* ===== SAFARI TAB CONTENT CENTER TEST START ===== */
+
+/*
+ * Centre favicon + visible title as one natural-width group.
+ *
+ * Equal flexible tracks on both sides keep the two auto-sized centre
+ * tracks mathematically centred. Avoid percentage-based max-width
+ * inside the intrinsic grid track because that collapses short titles.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  > .tab-stack
+  > .tab-content {
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    max-content
+    max-content
+    minmax(0, 1fr)
+    !important;
+
+  align-items: center !important;
+  column-gap: 5.5px !important;
+
+  justify-content: stretch !important;
+}
+
+/* Natural favicon width in the first centre track. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-icon-stack {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+
+  width: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  justify-self: center !important;
+}
+
+/*
+ * Short titles use their natural width.
+ * Long titles may consume up to 160 px before ellipsis.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-label-container {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+
+  display: block !important;
+
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: 160px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  justify-self: start !important;
+  overflow: hidden !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-label {
+  display: block !important;
+
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: 160px !important;
+
+  margin: 0 !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/*
+ * Auxiliary controls must not affect the centred favicon/title group.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  :is(
+    .tab-audio-button,
+    .tab-note-icon,
+    .tab-close-button
+  ) {
+  position: absolute !important;
+  z-index: 4 !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  :is(
+    .tab-audio-button,
+    .tab-note-icon
+  ) {
+  inset-inline-start: 7px !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-close-button {
+  inset-inline-end: 7px !important;
+  margin: 0 !important;
+}
+
+/* ===== SAFARI TAB CONTENT CENTER TEST END ===== */
+
+/* ===== SAFARI TAB HOVER GLYPH FIX START ===== */
+
+/*
+ * One stable 16 px glyph slot.
+ *
+ * A completed tab shows its favicon. During navigation the old favicon
+ * is hidden and replaced by a small controlled spinner. This avoids
+ * both stale favicons and Firefox's repeating-dot loading artwork.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-icon-stack {
+  position: relative !important;
+
+  display: grid !important;
+  place-items: center !important;
+
+  width: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+
+  height: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  overflow: visible !important;
+}
+
+/*
+ * Completed navigation: show exactly one favicon.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned], [busy])
+  .tab-icon-image {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+
+  position: static !important;
+  grid-area: 1 / 1 !important;
+
+  width: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+
+  height: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  translate: none !important;
+  scale: 1 !important;
+
+  transition: none !important;
+}
+
+/*
+ * Busy navigation: never expose the source page's stale favicon.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab[busy]:not([pinned])
+  .tab-icon-image {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/*
+ * Disable Firefox's native throbber and loading burst. Their internal
+ * animated artwork caused the repeated dots across the tab.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  :is(
+    .tab-throbber,
+    .tab-loading-burst
+  ) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+
+  width: 0 !important;
+  height: 0 !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  background: none !important;
+  animation: none !important;
+  transition: none !important;
+
+  pointer-events: none !important;
+}
+
+/*
+ * Controlled Safari-like loading indicator in the same icon slot.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab[busy]:not([pinned])
+  .tab-icon-stack::before {
+  content: "" !important;
+
+  display: block !important;
+  box-sizing: border-box !important;
+
+  grid-area: 1 / 1 !important;
+
+  width: 13px !important;
+  height: 13px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 1.5px solid
+    color-mix(
+      in srgb,
+      currentColor 24%,
+      transparent
+    )
+    !important;
+
+  border-top-color:
+    color-mix(
+      in srgb,
+      currentColor 78%,
+      transparent
+    )
+    !important;
+
+  border-radius: 50% !important;
+
+  animation:
+    safari-v8-tab-spinner
+    700ms linear infinite
+    !important;
+
+  pointer-events: none !important;
+}
+
+@keyframes safari-v8-tab-spinner {
+  to {
+    rotate: 1turn;
+  }
+}
+
+/*
+ * Firefox's native close button must not replace the favicon.
+ * Safari Compact uses its separate trailing reload control.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-close-button,
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned]):hover
+  .tab-close-button {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tabbrowser-tabs[orient="horizontal"]
+    .tabbrowser-tab[busy]:not([pinned])
+    .tab-icon-stack::before {
+    animation: none !important;
+  }
+}
+
+/* ===== SAFARI TAB HOVER GLYPH FIX END ===== */
+
+/* ===== SAFARI EIGHT-SPOKE BUSY INDICATOR START ===== */
+
+/*
+ * Apple-like activity indicator:
+ * eight separate rounded spokes with progressively reduced opacity.
+ *
+ * The entire indicator advances in eight discrete steps rather than
+ * rotating continuously like a CSS border spinner.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab[busy]:not([pinned])
+  .tab-icon-stack::before {
+  content: "" !important;
+
+  display: block !important;
+  box-sizing: border-box !important;
+
+  position: static !important;
+  grid-area: 1 / 1 !important;
+
+  width: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+
+  height: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+
+  background-color: transparent !important;
+
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cg fill='%231c1c1e'%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='1'/%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='.86' transform='rotate(45 8 8)'/%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='.72' transform='rotate(90 8 8)'/%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='.58' transform='rotate(135 8 8)'/%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='.44' transform='rotate(180 8 8)'/%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='.34' transform='rotate(225 8 8)'/%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='.24' transform='rotate(270 8 8)'/%3E%3Crect x='7.25' y='0.6' width='1.5' height='4' rx='.75' opacity='.16' transform='rotate(315 8 8)'/%3E%3C/g%3E%3C/svg%3E")
+    !important;
+
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 16px 16px !important;
+
+  opacity: .82 !important;
+
+  transform-origin: center !important;
+
+  animation:
+    safari-v8-eight-spoke-spin
+    800ms
+    steps(8, end)
+    infinite
+    !important;
+
+  pointer-events: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  #tabbrowser-tabs[orient="horizontal"]
+    .tabbrowser-tab[busy]:not([pinned])
+    .tab-icon-stack::before {
+    filter: invert(1) !important;
+    opacity: .72 !important;
+  }
+}
+
+@keyframes safari-v8-eight-spoke-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tabbrowser-tabs[orient="horizontal"]
+    .tabbrowser-tab[busy]:not([pinned])
+    .tab-icon-stack::before {
+    animation: none !important;
+  }
+}
+
+/* ===== SAFARI EIGHT-SPOKE BUSY INDICATOR END ===== */
