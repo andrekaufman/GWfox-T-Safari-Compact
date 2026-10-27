@@ -54,7 +54,7 @@
   let resizeObserver = null;
   const shifted = new Set();
 
-  const preferredExpansion = 64;
+  const preferredExpansion = 36;
   const safetyGap = 10;
 
   function selectedTab() {
