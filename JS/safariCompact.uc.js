@@ -25,6 +25,14 @@
   closeButton.setAttribute("aria-label", "Stäng flik");
   document.documentElement.appendChild(closeButton);
 
+  const reloadButton = document.createElement("button");
+  reloadButton.id = "safari-v8-tab-reload";
+  reloadButton.type = "button";
+  reloadButton.tabIndex = -1;
+  reloadButton.title = "Ladda om sida";
+  reloadButton.setAttribute("aria-label", "Ladda om sida");
+  document.documentElement.appendChild(reloadButton);
+
   const inputContainer = urlbar.querySelector(".urlbar-input-container");
   const glyphSlot = document.querySelector("#trust-icon-container");
   const glyph = document.querySelector("#trust-icon");
@@ -36,6 +44,7 @@
 
   let visible = false;
   let closeHover = false;
+  let reloadHover = false;
   let glyphFrame = 0;
   let glyphObserver = null;
   let newTabFocusTimer = 0;
@@ -72,6 +81,11 @@
     closeHover = false;
     closeButton.classList.remove("visible");
     urlbar.classList.remove("safari-v8-exact-close-hover");
+  }
+
+  function hideReload() {
+    reloadHover = false;
+    reloadButton.classList.remove("visible");
   }
 
   function setVisible(state) {
@@ -249,6 +263,7 @@
       applyPush();
       updateGlyph();
       if (closeHover) positionCloseButton();
+      if (reloadHover) positionReloadButton();
     });
   }
 
@@ -318,20 +333,82 @@
     closeButton.classList.add("visible");
   }
 
-  function onPointerMove(event) {
-    if (!visible) {
-      hideClose();
+  function reloadTargetRect() {
+    if (visible) return urlbar.getBoundingClientRect();
+    return selectedTab()?.getBoundingClientRect() || null;
+  }
+
+  function canReloadSelectedTab() {
+    const tab = selectedTab();
+    const spec = tab?.linkedBrowser?.currentURI?.spec || "";
+    return Boolean(tab) &&
+      spec !== "about:newtab" &&
+      spec !== "about:home" &&
+      spec !== "about:blank";
+  }
+
+  function positionReloadButton() {
+    const rect = reloadTargetRect();
+    if (!rect) return;
+
+    const size = 18;
+    const rightInset = 10;
+    const centerY = rect.top + rect.height / 2;
+    reloadButton.style.setProperty(
+      "--reload-left",
+      `${rect.right - rightInset - size}px`
+    );
+    reloadButton.style.setProperty(
+      "--reload-top",
+      `${centerY - size / 2}px`
+    );
+  }
+
+  function showReload() {
+    if (!canReloadSelectedTab()) {
+      hideReload();
       return;
     }
 
-    const rect = urlbar.getBoundingClientRect();
-    const inLeadingZone = event.clientX >= rect.left &&
-      event.clientX <= rect.left + 40 &&
-      event.clientY >= rect.top && event.clientY <= rect.bottom;
-    const onButton = event.target === closeButton || closeButton.contains(event.target);
+    reloadHover = true;
+    positionReloadButton();
+    reloadButton.classList.add("visible");
+  }
 
-    if (inLeadingZone || onButton) showClose();
+  function onPointerMove(event) {
+    const tab = selectedTab();
+    const rect = reloadTargetRect();
+
+    if (!tab || !rect) {
+      hideClose();
+      hideReload();
+      return;
+    }
+
+    const insideTarget =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom;
+    const onClose =
+      event.target === closeButton || closeButton.contains(event.target);
+    const onReload =
+      event.target === reloadButton || reloadButton.contains(event.target);
+    const inLeadingZone =
+      visible &&
+      event.clientX >= rect.left &&
+      event.clientX <= rect.left + 40 &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom;
+
+    if (inLeadingZone || onClose) showClose();
     else hideClose();
+
+    if ((insideTarget || onReload) && !inLeadingZone && !onClose) {
+      showReload();
+    } else {
+      hideReload();
+    }
   }
 
   function blockClosePress(event) {
@@ -346,6 +423,25 @@
     if (!tab) return;
     hideClose();
     gBrowser.removeTab(tab, { animate: true, byMouse: true });
+  }
+
+  function blockReloadPress(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
+  function reloadSelectedTab(event) {
+    blockReloadPress(event);
+    const tab = selectedTab();
+    if (!tab || !canReloadSelectedTab()) return;
+
+    hideReload();
+    if (typeof gBrowser.reloadTab === "function") {
+      gBrowser.reloadTab(tab);
+    } else {
+      tab.linkedBrowser.reload();
+    }
   }
 
   function onTabPointerDown(event) {
@@ -464,6 +560,9 @@
   closeButton.addEventListener("pointerdown", blockClosePress, true);
   closeButton.addEventListener("mousedown", blockClosePress, true);
   closeButton.addEventListener("click", closeSelectedTab, true);
+  reloadButton.addEventListener("pointerdown", blockReloadPress, true);
+  reloadButton.addEventListener("mousedown", blockReloadPress, true);
+  reloadButton.addEventListener("click", reloadSelectedTab, true);
 
   glyphObserver = new MutationObserver(updateGlyph);
 
@@ -510,6 +609,9 @@
     closeButton.removeEventListener("pointerdown", blockClosePress, true);
     closeButton.removeEventListener("mousedown", blockClosePress, true);
     closeButton.removeEventListener("click", closeSelectedTab, true);
+    reloadButton.removeEventListener("pointerdown", blockReloadPress, true);
+    reloadButton.removeEventListener("mousedown", blockReloadPress, true);
+    reloadButton.removeEventListener("click", reloadSelectedTab, true);
     closeUrlbar();
     clearAddressState();
     urlbar.classList.remove(
@@ -520,6 +622,7 @@
       .forEach(property => urlbar.style.removeProperty(property));
     glyph.style.removeProperty("list-style-image");
     closeButton.remove();
+    reloadButton.remove();
     delete window.__safariCompactCleanup;
   };
 

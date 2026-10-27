@@ -400,3 +400,67 @@
   #urlbar.safari-v8-newtab-enter #trust-icon { animation: none !important; }
 }
 
+/* Safari-like reload control at the trailing edge of the selected tab. */
+#safari-v8-tab-reload {
+  appearance: none !important;
+  -moz-default-appearance: none !important;
+  position: fixed !important;
+  left: var(--reload-left) !important;
+  top: var(--reload-top) !important;
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background-color: transparent !important;
+  background-image: url("chrome://global/skin/icons/reload.svg") !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 10.5px 10.5px !important;
+  -moz-context-properties: fill, fill-opacity !important;
+  fill: currentColor !important;
+  fill-opacity: .78 !important;
+  color: var(--toolbar-color, CanvasText) !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  cursor: default !important;
+  z-index: 2147483647 !important;
+  transform: scale(.82) rotate(-18deg) !important;
+  transform-origin: center !important;
+  transition:
+    opacity 90ms ease-out,
+    transform 140ms cubic-bezier(.2,.8,.2,1),
+    background-color 90ms ease-out
+    !important;
+}
+
+#safari-v8-tab-reload.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: scale(1) rotate(0deg) !important;
+}
+
+#safari-v8-tab-reload.visible:hover {
+  background-color: color-mix(in srgb, currentColor 14%, transparent) !important;
+  fill-opacity: 1 !important;
+}
+
+#safari-v8-tab-reload.visible:active {
+  transform: scale(.9) rotate(18deg) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #safari-v8-tab-reload {
+    transition: none !important;
+  }
+}
+
