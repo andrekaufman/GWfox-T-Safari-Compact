@@ -44,9 +44,28 @@
    */
   tabs.prepend(shelfProbe);
 
+  /*
+   * External compositing surface. This is the only tested paint position
+   * that makes the editable address pill visually match the active tab.
+   */
+  const addressSurface = document.createElement("div");
+  addressSurface.id = "safari-v8-address-surface";
+  addressSurface.setAttribute("aria-hidden", "true");
+  document.documentElement.appendChild(addressSurface);
+
   const inputContainer = urlbar.querySelector(".urlbar-input-container");
   const glyphSlot = document.querySelector("#trust-icon-container");
   const glyph = document.querySelector("#trust-icon");
+
+  /*
+   * The external Soft Light surface corrects the address material, but it
+   * also changes favicon colours. Render an untouched copy of the resolved
+   * glyph above the compositing surface.
+   */
+  const cleanGlyph = document.createElement("div");
+  cleanGlyph.id = "safari-v8-clean-glyph";
+  cleanGlyph.setAttribute("aria-hidden", "true");
+  document.documentElement.appendChild(cleanGlyph);
 
   if (!inputContainer || !glyphSlot || !glyph) {
     closeButton.remove();
@@ -131,6 +150,14 @@
     urlbar.classList.remove("safari-v8-exact-close-hover");
     glyphSlot.classList.remove("safari-v8-close-mask");
     tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
+
+    /*
+     * The clean glyph is a separate root-level copy. Restore it only after
+     * the close-hover state and its mask have been removed.
+     */
+    if (visible) {
+      queueMicrotask(updateCleanGlyph);
+    }
   }
 
   function hideReload() {
@@ -350,13 +377,89 @@
     return searchGlyph;
   }
 
+  function hideCleanGlyph() {
+    cleanGlyph.classList.remove("visible");
+    glyph.style.removeProperty("opacity");
+  }
+
+  function updateCleanGlyph() {
+    const closeActive =
+      urlbar.classList.contains("safari-v8-exact-close-hover");
+
+    if (
+      !visible ||
+      closeActive ||
+      !urlbar.classList.contains("safari-v8-visible")
+    ) {
+      hideCleanGlyph();
+      return;
+    }
+
+    const rect = glyph.getBoundingClientRect();
+    const style = getComputedStyle(glyph);
+
+    const source =
+      style.listStyleImage !== "none"
+        ? style.listStyleImage
+        : style.backgroundImage;
+
+    if (
+      rect.width <= 0 ||
+      rect.height <= 0 ||
+      !source ||
+      source === "none"
+    ) {
+      hideCleanGlyph();
+      return;
+    }
+
+    cleanGlyph.style.setProperty(
+      "--clean-glyph-left",
+      `${rect.left}px`
+    );
+    cleanGlyph.style.setProperty(
+      "--clean-glyph-top",
+      `${rect.top}px`
+    );
+    cleanGlyph.style.setProperty(
+      "--clean-glyph-width",
+      `${rect.width}px`
+    );
+    cleanGlyph.style.setProperty(
+      "--clean-glyph-height",
+      `${rect.height}px`
+    );
+    cleanGlyph.style.setProperty(
+      "--clean-glyph-image",
+      source
+    );
+
+    glyph.style.setProperty(
+      "opacity",
+      "0",
+      "important"
+    );
+
+    cleanGlyph.classList.add("visible");
+  }
+
   function updateGlyph() {
     cancelAnimationFrame(glyphFrame);
     if (!visible || !urlbar.classList.contains("safari-v8-visible")) return;
 
     applyGlyph(resolveGlyph());
-    queueMicrotask(() => { if (visible) applyGlyph(resolveGlyph()); });
-    glyphFrame = requestAnimationFrame(() => { if (visible) applyGlyph(resolveGlyph()); });
+
+    queueMicrotask(() => {
+      if (!visible) return;
+      applyGlyph(resolveGlyph());
+      updateCleanGlyph();
+    });
+
+    glyphFrame = requestAnimationFrame(() => {
+      if (!visible) return;
+      applyGlyph(resolveGlyph());
+      updateCleanGlyph();
+    });
   }
 
   function positionShelfGeometryProbe() {
@@ -426,14 +529,49 @@
     shelfProbeAnimationFrame = requestAnimationFrame(tick);
   }
 
+  function positionAddressSurface() {
+    if (!visible) {
+      addressSurface.classList.remove("visible");
+      return;
+    }
+
+    const rect = urlbar.getBoundingClientRect();
+
+    if (rect.width <= 0 || rect.height <= 0) {
+      addressSurface.classList.remove("visible");
+      return;
+    }
+
+    addressSurface.style.setProperty(
+      "--surface-left",
+      `${rect.left + 4}px`
+    );
+    addressSurface.style.setProperty(
+      "--surface-top",
+      `${rect.top + 3}px`
+    );
+    addressSurface.style.setProperty(
+      "--surface-width",
+      `${Math.max(1, rect.width - 8)}px`
+    );
+    addressSurface.style.setProperty(
+      "--surface-height",
+      `${Math.max(1, rect.height - 6)}px`
+    );
+
+    addressSurface.classList.add("visible");
+  }
+
   function render() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       positionUrlbar();
       applyPush();
+      positionAddressSurface();
       positionShelfGeometryProbe();
       followShelfGeometryAnimation();
       updateGlyph();
+      updateCleanGlyph();
       if (closeHover) positionCloseButton();
       if (reloadHover) positionReloadButton();
     });
@@ -473,6 +611,7 @@
     positionUrlbar();
     setVisible(true);
     applyPush();
+    positionAddressSurface();
 
     requestAnimationFrame(() => {
       gURLBar.focus();
@@ -486,8 +625,10 @@
   function closeUrlbar() {
     const tab = selectedTab();
     const wasVisible = visible;
+    hideCleanGlyph();
     setVisible(false);
     clearPush();
+    positionAddressSurface();
     positionShelfGeometryProbe();
     followShelfGeometryAnimation();
 
@@ -547,9 +688,18 @@
     closeHover = true;
     positionCloseButton();
     urlbar.classList.toggle("safari-v8-exact-close-hover", visible);
+
     if (visible) {
       glyphSlot.classList.add("safari-v8-close-mask");
+
+      /*
+       * The clean glyph is painted above the compositing surface and would
+       * otherwise cover the fixed close control. Hide it synchronously when
+       * close hover begins.
+       */
+      hideCleanGlyph();
     }
+
     closeButton.classList.add("visible");
   }
 
@@ -919,6 +1069,7 @@
   input.addEventListener("input", updateGlyph, true);
   input.addEventListener("select", updateGlyph, true);
   input.addEventListener("focus", updateGlyph, true);
+
   tabs.addEventListener("TabAttrModified", updateGlyph);
   tabs.addEventListener("TabAttrModified", onSafariTabAttrModified);
 
@@ -936,6 +1087,9 @@
     newTabOpening = false;
     resizeObserver?.disconnect();
     glyphObserver?.disconnect();
+    hideCleanGlyph();
+    cleanGlyph.remove();
+    addressSurface.remove();
     tabs.removeEventListener(
       "pointerdown",
       onTabPointerDown,
@@ -950,6 +1104,7 @@
     input.removeEventListener("input", updateGlyph, true);
     input.removeEventListener("select", updateGlyph, true);
     input.removeEventListener("focus", updateGlyph, true);
+
     layoutEvents.forEach(name => tabs.removeEventListener(name, settle));
     document.removeEventListener("focusin", onFocusIn, true);
     document.removeEventListener("focusout", onFocusOut, true);

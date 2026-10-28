@@ -1558,3 +1558,136 @@
 
 /* ===== SAFARI URL POINTER PLANE FIX END ===== */
 
+/* ===== SAFARI EXTERNAL ADDRESS COMPOSITE START ===== */
+/*
+ * External compositing surface at the proven paint position.
+ *
+ * Overlay makes the editable address foreground visually match the
+ * ordinary active tab. The clean-glyph layer restores favicon colours
+ * above this surface.
+ */
+#safari-v8-address-surface {
+  position: fixed !important;
+
+  left: var(--surface-left) !important;
+  top: var(--surface-top) !important;
+  width: var(--surface-width) !important;
+  height: var(--surface-height) !important;
+
+  display: block !important;
+  box-sizing: border-box !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+
+  background: rgb(255, 255, 255) !important;
+  background-color: rgb(255, 255, 255) !important;
+  background-image: none !important;
+
+  mix-blend-mode: overlay !important;
+
+  clip-path: inset(0 round 999px) !important;
+  overflow: hidden !important;
+  contain: paint !important;
+
+  opacity: 0 !important;
+  visibility: hidden !important;
+
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
+}
+
+#safari-v8-address-surface.visible {
+  /*
+   * Calibrated to visually match the ordinary active tab while the
+   * clean-glyph copy preserves the original favicon rendering.
+   */
+  opacity: .90 !important;
+  visibility: visible !important;
+}
+
+/*
+ * Stable selection fallback. Black selected text matches Safari.
+ * Markeringsfärgen finjusteras separat efter att den stabila pillen
+ * har återställts.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  .urlbar-input::selection {
+  color: rgb(0, 0, 0) !important;
+  background-color: rgb(93, 114, 255) !important;
+  text-shadow: none !important;
+}
+
+/*
+ * Readable centred placeholder.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  .urlbar-input::placeholder {
+  color: rgb(72, 72, 74) !important;
+  opacity: 1 !important;
+}
+
+/*
+ * Remove Firefox's asymmetric trailing padding so the address text
+ * remains centred in the complete expanded pill.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  .urlbar-input {
+  padding-inline: 0 !important;
+  text-align: center !important;
+}
+
+/* ===== SAFARI EXTERNAL ADDRESS COMPOSITE END ===== */
+
+/* ===== SAFARI CLEAN GLYPH ABOVE COMPOSITE START ===== */
+
+/*
+ * The Soft Light address surface alters favicon colours. This fixed copy
+ * displays the already-resolved Firefox glyph with normal compositing above
+ * the surface. Geometry comes from the real #trust-icon.
+ */
+#safari-v8-clean-glyph {
+  position: fixed !important;
+
+  left: var(--clean-glyph-left) !important;
+  top: var(--clean-glyph-top) !important;
+
+  width: var(--clean-glyph-width) !important;
+  height: var(--clean-glyph-height) !important;
+
+  display: block !important;
+
+  background-image:
+    var(--clean-glyph-image)
+    !important;
+
+  background-repeat:
+    no-repeat
+    !important;
+
+  background-position:
+    center
+    !important;
+
+  background-size:
+    contain
+    !important;
+
+  opacity: 0 !important;
+  visibility: hidden !important;
+
+  filter: none !important;
+  backdrop-filter: none !important;
+  mix-blend-mode: normal !important;
+
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
+}
+
+#safari-v8-clean-glyph.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* ===== SAFARI CLEAN GLYPH ABOVE COMPOSITE END ===== */
+
