@@ -475,8 +475,8 @@
 
   --safari-v8-inactive-tab-hover:
     light-dark(
-      rgba(72, 72, 74, .22),
-      rgba(255, 255, 255, .17)
+      rgba(90, 90, 94, .10),
+      rgba(255, 255, 255, .11)
     );
 
   --safari-v8-active-tab:
@@ -1019,4 +1019,542 @@
     rgba(255, 255, 255, .07)
   ) !important;
 }
+
+/* ===== SAFARI SHELF STACKING AND FOREGROUND POLISH START ===== */
+
+/*
+ * The shelf now lives inside #tabbrowser-tabs. Real tabs are always
+ * above it, while inactive transparent tab backgrounds expose it.
+ */
+#safari-v8-shelf-geometry-probe {
+  z-index: 0 !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/*
+ * Normal selected and direct-hover pills sit slightly inside the full
+ * grey shelf. Scale changes painting only, not tab layout or hit boxes.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:is(
+    [selected],
+    [visuallyselected]
+  ):not(.safari-v8-address)
+  > .tab-stack
+  > .tab-background,
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  ):hover
+  > .tab-stack
+  > .tab-background {
+  scale: .982 .889 !important;
+  transform-origin: center !important;
+  border-radius: 999px !important;
+}
+
+/*
+ * Address editing is a separate foreground surface. Keep it full-sized
+ * and opaque white regardless of ATBC website colour or color-scheme.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-address
+  > .tab-stack
+  > .tab-background {
+  scale: 1 !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible
+  > #urlbar-background {
+  background: rgb(255, 255, 255) !important;
+  background-color: rgb(255, 255, 255) !important;
+  background-image: none !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+}
+
+/* ===== SAFARI SHELF STACKING AND FOREGROUND POLISH END ===== */
+
+/* ===== SAFARI FINAL TAB POLISH START ===== */
+
+/* Shelf and real tabs share one stacking context. */
+#safari-v8-shelf-geometry-probe {
+  z-index: 0 !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"] .tabbrowser-tab {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/*
+ * Selected pill: roughly 3 px shelf reveal on all sides.
+ * Hover pill: roughly 1 px reveal, closer to Safari's nested outline.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:is([selected], [visuallyselected]):not(.safari-v8-address)
+  > .tab-stack
+  > .tab-background {
+  scale: .972 .833 !important;
+  transform-origin: center !important;
+  border-radius: 999px !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  ):hover
+  > .tab-stack
+  > .tab-background {
+  scale: .972 .833 !important;
+  transform-origin: center !important;
+  border-radius: 999px !important;
+  box-shadow: inset 0 0 0 .5px light-dark(
+    rgba(60, 60, 67, .055),
+    rgba(255, 255, 255, .07)
+  ) !important;
+}
+
+/* The genuine URL pill remains full-size and opaque white. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-address
+  > .tab-stack
+  > .tab-background {
+  scale: 1 !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible > #urlbar-background {
+  background: rgb(255, 255, 255) !important;
+  background-color: rgb(255, 255, 255) !important;
+  background-image: none !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+}
+
+/* ===== SAFARI FINAL TAB POLISH END ===== */
+
+
+/* ===== SAFARI URL FOCUS RING SUPPRESSION START ===== */
+
+/*
+ * Firefox paints a 3.5 px blue focus outline around the complete URL
+ * surface. Safari represents focus through the selected text and white
+ * foreground pill instead, so suppress only that outer outline.
+ *
+ * URL geometry, background, Safe Push and dropdown remain unchanged.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-background {
+  outline:
+    none
+    !important;
+
+  outline-width:
+    0
+    !important;
+
+  outline-offset:
+    0
+    !important;
+}
+
+/* ===== SAFARI URL FOCUS RING SUPPRESSION END ===== */
+
+/* ===== SAFARI CONSOLIDATED HOVER CONTROLS START ===== */
+#safari-v8-exact-close,
+#safari-v8-tab-reload {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  border-radius: 50% !important;
+  background-color: transparent !important;
+  background-size: 9.5px 9.5px !important;
+  transform: none !important;
+  transition: opacity 80ms ease-out, background-color 80ms ease-out !important;
+  z-index: 2147483647 !important;
+}
+
+#safari-v8-exact-close.visible,
+#safari-v8-tab-reload.visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: none !important;
+}
+
+#safari-v8-exact-close.visible:hover,
+#safari-v8-tab-reload.visible:hover {
+  background-color: color-mix(in srgb, currentColor 12%, transparent) !important;
+}
+
+#safari-v8-exact-close.visible:active,
+#safari-v8-tab-reload.visible:active {
+  transform: scale(.9) !important;
+}
+/* ===== SAFARI CONSOLIDATED HOVER CONTROLS END ===== */
+
+/* ===== SAFARI HOVER CONTROL FINALIZATION START ===== */
+
+/* Hide only the glyph that physically overlaps the measured close control. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-close-over-icon
+  .tab-icon-image,
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-close-over-icon
+  .tab-icon-stack::before {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Keep both controls optically identical; artwork is centered in same canvas. */
+#safari-v8-exact-close,
+#safari-v8-tab-reload {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  background-size: 9.5px 9.5px !important;
+  background-position: center !important;
+  transform: none !important;
+}
+
+/* ===== SAFARI HOVER CONTROL FINALIZATION END ===== */
+
+/* ===== SAFARI DOMAIN LABELS AND FAST HOVER EXIT START ===== */
+
+/*
+ * Keep Firefox's real title untouched for previews/tooltips. Only the
+ * visible tab-row label is replaced by a hostname stored on .tab-label.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-label[data-safari-display-label] {
+  font-size: 0 !important;
+  min-width: 0 !important;
+  max-width: 132px !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-label[data-safari-display-label]::after {
+  content: attr(data-safari-display-label) !important;
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 132px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font: menu !important;
+  color: currentColor !important;
+}
+
+/* Reserve the trailing control area so hostname and reload never collide. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  .tab-label-container {
+  max-width: 132px !important;
+}
+
+/* Replace the inherited ~500 ms material fade with a short symmetric exit. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned], .safari-v8-address)
+  > .tab-stack
+  > .tab-background {
+  transition:
+    background 90ms ease-out,
+    box-shadow 90ms ease-out,
+    scale 90ms ease-out
+    !important;
+}
+
+/* Crossfade only when the measured close rectangle overlaps the glyph. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned])
+  :is(.tab-icon-image, .tab-icon-stack::before) {
+  transition: opacity 80ms ease-out !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-close-over-icon
+  .tab-icon-image,
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-close-over-icon
+  .tab-icon-stack::before {
+  visibility: visible !important;
+  opacity: 0 !important;
+}
+
+#safari-v8-exact-close,
+#safari-v8-tab-reload {
+  transition:
+    opacity 80ms ease-out,
+    background-color 80ms ease-out
+    !important;
+}
+
+/* ===== SAFARI DOMAIN LABELS AND FAST HOVER EXIT END ===== */
+
+/* ===== SAFARI ADDRESS MODE POLISH START ===== */
+
+/*
+ * Firefox exposes the painted address surface as .urlbar-background.
+ * Keep the selected/editing address pill opaque white without changing
+ * its geometry, dropdown, Safe Push, or ordinary tab materials.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-background,
+#urlbar.safari-v8-moving.safari-v8-visible
+  .urlbar-background {
+  background: rgb(255, 255, 255) !important;
+  background-color: rgb(255, 255, 255) !important;
+  background-image: none !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+  transition: none !important;
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-offset: 0 !important;
+}
+
+/* ===== SAFARI ADDRESS MODE POLISH END ===== */
+
+/* ===== SAFARI ADDRESS LAYOUT FINAL START ===== */
+
+/*
+ * The outer URL box and shelf keep their proven 36 px geometry. Only the
+ * painted white foreground surface is inset, giving the same grey reveal on
+ * all four sides while the extra expansion remains horizontal.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-background,
+#urlbar.safari-v8-moving.safari-v8-visible
+  .urlbar-background {
+  inset-block: 3px !important;
+  inset-inline: 4px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  scale: 1 !important;
+  transform: none !important;
+  border-radius: 999px !important;
+}
+
+/* Centre the editable address in the complete expanded pill. */
+#urlbar.safari-v8-moving.safari-v8-visible
+  .urlbar-input {
+  text-align: center !important;
+}
+
+/* Keep both edge-control reservations symmetric around the centred text. */
+#urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-input-container {
+  padding-inline: 4px !important;
+}
+
+/*
+ * While close is visible, hide the complete leading glyph container rather
+ * than only its inner image. This prevents favicon/search-glass merging while
+ * retaining the container's width, so the centred address does not jump.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover
+  #trust-icon-container {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* ===== SAFARI ADDRESS LAYOUT FINAL END ===== */
+
+/* ===== SAFARI ADDRESS STATE CONSOLIDATION START ===== */
+
+/* The outer shelf remains grey; the actual editable foreground is white. */
+#urlbar.safari-v8-moving.safari-v8-visible > .urlbar-background {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  margin-block: 3px !important;
+  margin-inline: 4px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: calc(100% - 6px) !important;
+  min-height: 0 !important;
+  border-radius: 999px !important;
+  background: rgb(255, 255, 255) !important;
+  background-color: rgb(255, 255, 255) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 .5px rgba(60, 60, 67, .10) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+}
+
+/* Centre both typed text and the placeholder in the expanded foreground. */
+#urlbar.safari-v8-moving.safari-v8-visible .urlbar-input,
+#urlbar.safari-v8-moving.safari-v8-visible .urlbar-input::placeholder {
+  text-align: center !important;
+}
+
+/* Safari-like handoff from address overlay back to centred domain label. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-content-return
+  > .tab-stack
+  > .tab-content {
+  animation: safari-v8-content-return 120ms ease-out both !important;
+}
+
+@keyframes safari-v8-content-return {
+  from { opacity: 0; translate: 0 1px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+/* No delayed disappearance after pointer leaves the tab-control session. */
+#safari-v8-exact-close,
+#safari-v8-tab-reload {
+  transition: background-color 70ms ease-out !important;
+}
+
+/* ===== SAFARI ADDRESS STATE CONSOLIDATION END ===== */
+
+/* ===== SAFARI NEWTAB TRANSACTION AND GLYPH MASK START ===== */
+
+/*
+ * Close and the leading glyph intentionally share one slot in address mode.
+ * Keep the slot's width, but suppress every painted descendant while close is
+ * visible so search glass/favicon and close can never merge.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  #trust-icon-container.safari-v8-close-mask,
+#urlbar.safari-v8-moving.safari-v8-visible
+  #trust-icon-container.safari-v8-close-mask * {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  background-image: none !important;
+  list-style-image: none !important;
+}
+
+/* Also cover Firefox alternative leading-icon wrappers without collapsing them. */
+#urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover
+  :is(.searchmode-switcher, #identity-icon-box, #identity-icon) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* ===== SAFARI NEWTAB TRANSACTION AND GLYPH MASK END ===== */
+
+/* ===== SAFARI PAGE ACTION REPLACEMENT ONLY START ===== */
+/* The custom reload control exclusively owns the trailing address slot. */
+#urlbar.safari-v8-moving.safari-v8-visible
+  :is(#page-action-buttons, #star-button-box, #star-button) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+/* ===== SAFARI PAGE ACTION REPLACEMENT ONLY END ===== */
+
+/* ===== SAFARI URL HIT TESTING FIX START ===== */
+
+/*
+ * Runtime hit-testing showed the selected .tabbrowser-tab above #urlbar.
+ * In address mode the real Firefox input must own the pointer plane, while
+ * the hidden source tab remains in layout only.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible {
+  z-index: 2147483000 !important;
+  pointer-events: auto !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible
+  :is(.urlbar-input-container, .urlbar-input-box, .urlbar-input) {
+  pointer-events: auto !important;
+}
+
+/* Preserve layout/stacking, but stop the invisible source tab intercepting. */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-address {
+  pointer-events: none !important;
+}
+
+/* Fixed custom controls remain clickable above the input plane. */
+#safari-v8-exact-close,
+#safari-v8-tab-reload {
+  z-index: 2147483647 !important;
+}
+
+/* ===== SAFARI URL HIT TESTING FIX END ===== */
+
+/* ===== SAFARI URL POINTER PLANE FIX START ===== */
+
+/*
+ * #TabsToolbar is a separate stacking context above #urlbar's ancestor.
+ * z-index on #urlbar therefore cannot win hit-testing. While address editing
+ * is active, disable the toolbar pointer plane and selectively restore only
+ * controls that must remain interactive.
+ */
+/*
+ * The toolbar's transparent stacking plane must not cover the real URL input.
+ * Descendant tabs can still be restored individually with pointer-events:auto.
+ */
+:root.safari-v8-address-active #TabsToolbar,
+:root.safari-v8-address-active #tabbrowser-tabs,
+:root.safari-v8-address-active #tabbrowser-arrowscrollbox,
+:root.safari-v8-address-active #tabbrowser-arrowscrollbox-periphery {
+  pointer-events: none !important;
+}
+
+/*
+ * Keep every non-address tab and the new-tab button interactive while the
+ * selected tab's surface is occupied by the real Firefox URL input.
+ */
+:root.safari-v8-address-active
+  .tabbrowser-tab:not(.safari-v8-address),
+:root.safari-v8-address-active
+  :is(#tabs-newtab-button, #new-tab-button) {
+  pointer-events: auto !important;
+}
+
+/* The real input and custom fixed controls own pointer interaction. */
+:root.safari-v8-address-active
+  #urlbar.safari-v8-moving.safari-v8-visible,
+:root.safari-v8-address-active
+  #urlbar.safari-v8-moving.safari-v8-visible
+  :is(.urlbar-input-container, .urlbar-input-box, .urlbar-input),
+:root.safari-v8-address-active
+  :is(#safari-v8-exact-close, #safari-v8-tab-reload) {
+  pointer-events: auto !important;
+  cursor: text;
+}
+
+:root.safari-v8-address-active
+  :is(#safari-v8-exact-close, #safari-v8-tab-reload) {
+  cursor: default !important;
+}
+
+/* ===== SAFARI URL POINTER PLANE FIX END ===== */
 
