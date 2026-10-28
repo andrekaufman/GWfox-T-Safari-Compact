@@ -215,35 +215,77 @@
   }
 
   function applyPush() {
-    clearPush();
-    if (!visible) return;
+    if (!visible) {
+      clearPush();
+      return;
+    }
 
     const active = selectedTab();
     const plus = plusButton();
-    if (!active) return;
+
+    if (!active) {
+      clearPush();
+      return;
+    }
 
     const expansion = safeExpansion(plus);
-    if (expansion < 8) return;
 
-    urlbar.style.setProperty("--safari-v8-expand", `${expansion}px`);
+    if (expansion < 8) {
+      clearPush();
+      return;
+    }
 
+    urlbar.style.setProperty(
+      "--safari-v8-expand",
+      `${expansion}px`
+    );
+
+    /*
+     * Reconcile the desired push targets instead of clearing and rebuilding
+     * them on every render. Removing and immediately restoring the class
+     * restarted the translate transition during the delayed settle render,
+     * producing a 96 px -> 0 px -> 96 px reversal.
+     */
+    const desired = new Set();
     let afterActive = false;
+
     for (const tab of gBrowser.tabs) {
       if (tab === active) {
         afterActive = true;
         continue;
       }
-      if (afterActive && !tab.hidden && !tab.closing) {
-        tab.classList.add("safari-v8-pushed");
-        tab.style.setProperty("--safari-v8-push", `${expansion}px`);
-        shifted.add(tab);
+
+      if (
+        afterActive &&
+        !tab.hidden &&
+        !tab.closing
+      ) {
+        desired.add(tab);
       }
     }
 
     if (plus) {
-      plus.classList.add("safari-v8-pushed");
-      plus.style.setProperty("--safari-v8-push", `${expansion}px`);
-      shifted.add(plus);
+      desired.add(plus);
+    }
+
+    for (const element of [...shifted]) {
+      if (desired.has(element)) continue;
+
+      element.classList.remove("safari-v8-pushed");
+      element.style.removeProperty("--safari-v8-push");
+      shifted.delete(element);
+    }
+
+    for (const element of desired) {
+      element.style.setProperty(
+        "--safari-v8-push",
+        `${expansion}px`
+      );
+
+      if (!shifted.has(element)) {
+        element.classList.add("safari-v8-pushed");
+        shifted.add(element);
+      }
     }
   }
 
