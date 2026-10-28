@@ -1691,3 +1691,68 @@
 
 /* ===== SAFARI CLEAN GLYPH ABOVE COMPOSITE END ===== */
 
+/* ===== SAFARI NAVIGATION SHIFT EXCLUSIVE MOTION START ===== */
+
+/*
+ * During the measured navigation-history reflow, WAAPI and the JavaScript
+ * geometry interpolator exclusively own movement. Existing transitions
+ * would otherwise restart for every intermediate variable update and make
+ * the shelf and fixed controls visibly trail the real tabs.
+ */
+:root.safari-v8-navigation-shift
+  #safari-v8-shelf-geometry-probe,
+:root.safari-v8-navigation-shift
+  #safari-v8-tab-reload,
+:root.safari-v8-navigation-shift
+  #safari-v8-exact-close,
+:root.safari-v8-navigation-shift
+  #safari-v8-address-surface,
+:root.safari-v8-navigation-shift
+  #safari-v8-clean-glyph {
+  transition: none !important;
+}
+
+/*
+ * The shelf receives new left/top/width/height variables every frame.
+ * Keep its material and rounded edges stable while those dimensions change.
+ */
+:root.safari-v8-navigation-shift
+  #safari-v8-shelf-geometry-probe {
+  will-change: left, top, width, height !important;
+}
+
+/* ===== SAFARI NAVIGATION SHIFT EXCLUSIVE MOTION END ===== */
+
+/* ===== SAFARI FIRST INACTIVE TAB INSET START ===== */
+
+/*
+ * The first ordinary inactive tab otherwise paints at the complete shelf
+ * height and begins directly at the shelf's left edge. Scale only the
+ * painted background, preserving the real tab layout and pointer hit box.
+ *
+ * This matches the approximately 3 px shelf reveal used by selected pills.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:first-of-type:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  )
+  > .tab-stack
+  > .tab-background {
+  scale:
+    .972 .833
+    !important;
+
+  transform-origin:
+    center
+    !important;
+
+  border-radius:
+    999px
+    !important;
+}
+
+/* ===== SAFARI FIRST INACTIVE TAB INSET END ===== */
+

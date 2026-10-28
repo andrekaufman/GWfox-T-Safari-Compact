@@ -144,6 +144,451 @@
   let controlHideTimer = 0;
   let selectedTabClickCandidate = null;
 
+  /*
+   * Firefox shifts the complete tab strip by about 52 px when the selected
+   * tab changes between having and not having navigation history.
+   * Capture the pre-change geometry and visually bridge that reflow.
+   */
+  let navigationShiftSnapshot = null;
+  let navigationShiftAnimations = [];
+  let navigationShiftGeometryFrame = 0;
+  let navigationShiftInProgress = false;
+
+  function navigationShiftTargets() {
+    return [
+      ...Array.from(gBrowser.tabs).filter(
+        tab =>
+          !tab.hidden &&
+          !tab.closing
+      ),
+      plusButton(),
+      shelfProbe,
+      closeButton,
+      reloadButton,
+      addressSurface,
+      cleanGlyph
+    ].filter(element => {
+      if (!element || !element.isConnected) return false;
+
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.display !== "none" &&
+        style.visibility !== "hidden"
+      );
+    });
+  }
+
+  function captureNavigationShiftSnapshot() {
+    const tab = selectedTab();
+    const rects = new Map();
+
+    for (const element of navigationShiftTargets()) {
+      const rect = element.getBoundingClientRect();
+
+      rects.set(element, {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+
+    navigationShiftSnapshot = {
+      tabsLeft:
+        tabs.getBoundingClientRect().left,
+
+      canGoBack:
+        Boolean(
+          tab?.linkedBrowser?.canGoBack
+        ),
+
+      rects
+    };
+  }
+
+  function cancelNavigationShiftAnimations() {
+    cancelAnimationFrame(
+      navigationShiftGeometryFrame
+    );
+    navigationShiftGeometryFrame = 0;
+
+    const animations = navigationShiftAnimations;
+    navigationShiftAnimations = [];
+
+    for (const animation of animations) {
+      try {
+        animation.cancel();
+      } catch {}
+    }
+  }
+
+  function positionFinalNavigationGeometry() {
+    positionUrlbar();
+    applyPush();
+    positionAddressSurface();
+    positionShelfGeometryProbe();
+
+    if (visible) {
+      updateCleanGlyph();
+    }
+
+    if (closeHover) {
+      positionCloseButton();
+    }
+
+    if (reloadHover) {
+      positionReloadButton();
+    }
+  }
+
+  function animateNavigationShiftIfNeeded() {
+    const snapshot = navigationShiftSnapshot;
+    navigationShiftSnapshot = null;
+
+    if (!snapshot) return;
+
+    const tab = selectedTab();
+    if (!tab) return;
+
+    const newTabsLeft =
+      tabs.getBoundingClientRect().left;
+
+    const newCanGoBack =
+      Boolean(tab.linkedBrowser?.canGoBack);
+
+    const stripDelta =
+      snapshot.tabsLeft - newTabsLeft;
+
+    const navigationGeometryChanged =
+      snapshot.canGoBack !== newCanGoBack &&
+      Math.abs(stripDelta) >= 24 &&
+      Math.abs(stripDelta) <= 80;
+
+    if (!navigationGeometryChanged) return;
+
+    cancelNavigationShiftAnimations();
+
+    shelfProbeAnimationToken += 1;
+    cancelAnimationFrame(shelfProbeAnimationFrame);
+    shelfProbeAnimationFrame = 0;
+
+    /*
+     * First establish the exact final logical geometry.
+     */
+    positionFinalNavigationGeometry();
+
+    /*
+     * While navigation FLIP runs, WAAPI and the shelf rAF interpolator
+     * exclusively own visual geometry. Ordinary CSS transitions would
+     * otherwise restart on every frame and make fixed layers lag behind.
+     */
+    document.documentElement.classList.add(
+      "safari-v8-navigation-shift"
+    );
+
+    const oldShelfRect =
+      snapshot.rects.get(shelfProbe);
+
+    const finalShelfBox =
+      shelfProbe.getBoundingClientRect();
+
+    const finalShelfRect = {
+      left: finalShelfBox.left,
+      top: finalShelfBox.top,
+      width: finalShelfBox.width,
+      height: finalShelfBox.height
+    };
+
+    navigationShiftInProgress = true;
+
+    const timing = {
+      duration: 180,
+      easing:
+        "cubic-bezier(.2, .8, .2, 1)",
+      fill: "none"
+    };
+
+    /*
+     * A constant-opacity animation acts as the shared timing clock.
+     * Reading computed progress gives the exact same easing curve used
+     * by tabs, plusknapp and fixed controls.
+     */
+    const clock = shelfProbe.animate(
+      [
+        { opacity: 1 },
+        { opacity: 1 }
+      ],
+      timing
+    );
+
+    const animations = [clock];
+
+    /*
+     * Interpolate real shelf variables rather than scaling the painted
+     * shelf. Border radius, border and material therefore remain stable.
+     */
+    if (oldShelfRect) {
+      const lerp = (from, to, progress) =>
+        from + (to - from) * progress;
+
+      const applyShelfProgress = progress => {
+        /*
+         * Navigation history changes only the horizontal reservation.
+         * Keep vertical geometry fixed throughout the transition so the
+         * shelf cannot grow or contract by subpixels between frames.
+         */
+        shelfProbe.style.setProperty(
+          "--probe-left",
+          `${lerp(
+            oldShelfRect.left,
+            finalShelfRect.left,
+            progress
+          )}px`
+        );
+
+        shelfProbe.style.setProperty(
+          "--probe-top",
+          `${finalShelfRect.top}px`
+        );
+
+        shelfProbe.style.setProperty(
+          "--probe-width",
+          `${Math.max(
+            1,
+            lerp(
+              oldShelfRect.width,
+              finalShelfRect.width,
+              progress
+            )
+          )}px`
+        );
+
+        shelfProbe.style.setProperty(
+          "--probe-height",
+          `${Math.max(
+            1,
+            finalShelfRect.height
+          )}px`
+        );
+      };
+
+      applyShelfProgress(0);
+
+      const tickShelf = () => {
+        if (!navigationShiftInProgress) return;
+
+        /*
+         * Tab transforms are sampled directly by the compositor, while
+         * shelf variables are written by this requestAnimationFrame
+         * callback. Sample the shared timeline approximately one display
+         * frame ahead to compensate for that scheduling difference.
+         */
+        const duration = 180;
+        const frameLead = 16;
+
+        const currentTime =
+          typeof clock.currentTime === "number"
+            ? clock.currentTime
+            : 0;
+
+        const rawProgress =
+          Math.max(
+            0,
+            Math.min(
+              1,
+              (currentTime + frameLead) / duration
+            )
+          );
+
+        /*
+         * Evaluate the same cubic-bezier(.2, .8, .2, 1) curve as the
+         * compositor animation. First invert x numerically, then read y.
+         */
+        const cubic = (a, b, c, d, t) => {
+          const inverse = 1 - t;
+
+          return (
+            inverse * inverse * inverse * a +
+            3 * inverse * inverse * t * b +
+            3 * inverse * t * t * c +
+            t * t * t * d
+          );
+        };
+
+        let low = 0;
+        let high = 1;
+
+        for (
+          let iteration = 0;
+          iteration < 10;
+          iteration++
+        ) {
+          const middle = (low + high) / 2;
+
+          const x = cubic(
+            0,
+            .2,
+            .2,
+            1,
+            middle
+          );
+
+          if (x < rawProgress) {
+            low = middle;
+          } else {
+            high = middle;
+          }
+        }
+
+        const curveTime = (low + high) / 2;
+
+        const boundedProgress = cubic(
+          0,
+          .8,
+          1,
+          1,
+          curveTime
+        );
+
+        applyShelfProgress(boundedProgress);
+
+        if (boundedProgress < 1) {
+          navigationShiftGeometryFrame =
+            requestAnimationFrame(tickShelf);
+        } else {
+          navigationShiftGeometryFrame = 0;
+        }
+      };
+
+      navigationShiftGeometryFrame =
+        requestAnimationFrame(tickShelf);
+    }
+
+    const currentTargets =
+      navigationShiftTargets();
+
+    const targetSet = new Set([
+      ...snapshot.rects.keys(),
+      ...currentTargets
+    ]);
+
+    for (const element of targetSet) {
+      if (
+        !element?.isConnected ||
+        element === shelfProbe
+      ) {
+        continue;
+      }
+
+      const oldRect =
+        snapshot.rects.get(element);
+
+      if (!oldRect) continue;
+
+      const newRect =
+        element.getBoundingClientRect();
+
+      if (
+        newRect.width <= 0 ||
+        newRect.height <= 0
+      ) {
+        continue;
+      }
+
+      const deltaX =
+        oldRect.left - newRect.left;
+
+      const deltaY =
+        oldRect.top - newRect.top;
+
+      if (
+        Math.abs(deltaX) < 0.5 &&
+        Math.abs(deltaY) < 0.5
+      ) {
+        continue;
+      }
+
+      const isRealTab =
+        element.classList?.contains(
+          "tabbrowser-tab"
+        );
+
+      const isPlusButton =
+        element === plusButton();
+
+      let animation;
+
+      if (isRealTab || isPlusButton) {
+        animation = element.animate(
+          [
+            {
+              transform:
+                `translate(${deltaX}px, ${deltaY}px)`
+            },
+            {
+              transform:
+                "translate(0px, 0px)"
+            }
+          ],
+          timing
+        );
+      } else {
+        /*
+         * Fixed visual layers use translate so their !important left/top
+         * declarations and reload's own scale/rotation remain intact.
+         */
+        animation = element.animate(
+          [
+            {
+              translate:
+                `${deltaX}px ${deltaY}px`
+            },
+            {
+              translate:
+                "0px 0px"
+            }
+          ],
+          timing
+        );
+      }
+
+      animations.push(animation);
+    }
+
+    navigationShiftAnimations = animations;
+
+    Promise.all(
+      animations.map(animation =>
+        animation.finished.catch(() => null)
+      )
+    ).then(() => {
+      if (
+        navigationShiftAnimations !== animations
+      ) {
+        return;
+      }
+
+      cancelAnimationFrame(
+        navigationShiftGeometryFrame
+      );
+      navigationShiftGeometryFrame = 0;
+
+      navigationShiftAnimations = [];
+      navigationShiftInProgress = false;
+
+      document.documentElement.classList.remove(
+        "safari-v8-navigation-shift"
+      );
+
+      positionFinalNavigationGeometry();
+      settle();
+    });
+  }
+
   function hideClose() {
     closeHover = false;
     closeButton.classList.remove("visible");
@@ -488,7 +933,19 @@
       return;
     }
 
-    const left = Math.min(firstBackground.left, urlRect?.left ?? Infinity);
+    /*
+     * Reveal the same approximately 3 px of grey shelf at the leading edge
+     * as above and below the first pill. Using firstBackground.left directly
+     * made the shelf begin at the already scaled pill edge, leaving zero
+     * visible leading inset.
+     */
+    const opticalStartPadding = 3;
+
+    const left = Math.min(
+      firstBackground.left - opticalStartPadding,
+      urlRect?.left ?? Infinity
+    );
+
     const opticalEndPadding = visible ? 0 : 3;
     const desiredRight = Math.max(
       lastBackground.right + opticalEndPadding,
@@ -498,8 +955,36 @@
       ? plusRect.left - 8
       : desiredRight;
     const right = Math.min(desiredRight, rightLimit);
-    const top = Math.min(firstBackground.top, urlRect?.top ?? Infinity);
-    const bottom = Math.max(firstBackground.bottom, urlRect?.bottom ?? -Infinity);
+    /*
+     * Background rectangles are visually scaled for selected and hovered
+     * pills. Deriving shelf height from those painted rectangles made the
+     * shelf pulse vertically when selection moved between tabs.
+     *
+     * The real tab rectangle is stable at 44 px. Firefox's tab background
+     * occupies the central 36 px, with a 4 px inset above and below.
+     */
+    const firstTabRect =
+      normalTabs[0].getBoundingClientRect();
+
+    const stableTop =
+      firstTabRect.top + 4;
+
+    const stableBottom =
+      firstTabRect.bottom - 4;
+
+    const top = visible
+      ? Math.min(
+          stableTop,
+          urlRect?.top ?? Infinity
+        )
+      : stableTop;
+
+    const bottom = visible
+      ? Math.max(
+          stableBottom,
+          urlRect?.bottom ?? -Infinity
+        )
+      : stableBottom;
 
     shelfProbe.style.setProperty("--probe-left", `${left}px`);
     shelfProbe.style.setProperty("--probe-top", `${top}px`);
@@ -567,13 +1052,27 @@
     frame = requestAnimationFrame(() => {
       positionUrlbar();
       applyPush();
-      positionAddressSurface();
-      positionShelfGeometryProbe();
-      followShelfGeometryAnimation();
       updateGlyph();
-      updateCleanGlyph();
-      if (closeHover) positionCloseButton();
-      if (reloadHover) positionReloadButton();
+
+      /*
+       * Fixed visual layers receive their own exact FLIP animation.
+       * Do not rewrite their viewport coordinates until that animation
+       * has completed.
+       */
+      if (!navigationShiftInProgress) {
+        positionAddressSurface();
+        positionShelfGeometryProbe();
+        followShelfGeometryAnimation();
+        updateCleanGlyph();
+
+        if (closeHover) {
+          positionCloseButton();
+        }
+
+        if (reloadHover) {
+          positionReloadButton();
+        }
+      }
     });
   }
 
@@ -759,6 +1258,12 @@
   }
 
   function onPointerMove(event) {
+    /*
+     * Close and reload belong to the geometry captured at the beginning
+     * of the navigation transaction. Do not retarget or reposition them
+     * while their shared FLIP animation is running.
+     */
+    if (navigationShiftInProgress) return;
     const onClose =
       event.target === closeButton || closeButton.contains(event.target);
     const onReload =
@@ -903,6 +1408,13 @@
       return;
     }
 
+    /*
+     * Capture before Firefox changes selected tab, navigation history or
+     * toolbar geometry. This also catches the new-tab button because its
+     * pointer event passes through the tab strip.
+     */
+    captureNavigationShiftSnapshot();
+
     const tab = event.target.closest?.(".tabbrowser-tab");
 
     /*
@@ -941,6 +1453,13 @@
 
   function onTabSelect() {
     updateSafariDisplayLabel(selectedTab());
+
+    /*
+     * TabSelect fires after Firefox has committed the new navigation-button
+     * geometry. Measure synchronously before the browser paints the reflow.
+     */
+    animateNavigationShiftIfNeeded();
+
     queueMicrotask(() => {
       if (!newTabOpening) closeUrlbar();
       settle();
@@ -986,6 +1505,14 @@
   function onTabOpen(event) {
     clearTimeout(newTabFocusTimer);
     const openedTab = event.target;
+
+    /*
+     * If TabSelect already consumed the snapshot this is a no-op.
+     * Otherwise bridge the new-tab navigation reflow here.
+     */
+    queueMicrotask(
+      animateNavigationShiftIfNeeded
+    );
     updateSafariDisplayLabel(openedTab);
     newTabOpening = true;
 
@@ -1080,6 +1607,15 @@
     cancelAnimationFrame(frame);
     cancelAnimationFrame(glyphFrame);
     clearTimeout(settleTimer);
+
+    cancelNavigationShiftAnimations();
+    navigationShiftSnapshot = null;
+    navigationShiftGeometryFrame = 0;
+    navigationShiftInProgress = false;
+
+    document.documentElement.classList.remove(
+      "safari-v8-navigation-shift"
+    );
     clearTimeout(newTabFocusTimer);
     clearTimeout(controlHideTimer);
     shelfProbeAnimationToken += 1;
