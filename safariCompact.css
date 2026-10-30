@@ -1275,64 +1275,6 @@
   max-width: 132px !important;
 }
 
-/*
- * The fixed hover controls consume the two end slots of a compressed tab.
- * Let the real tab label use only the measured space left between them.
- */
-#tabbrowser-tabs[orient="horizontal"]
-  .tabbrowser-tab.safari-v8-hover-controls
-  .tab-label-container {
-  max-width: min(
-    132px,
-    var(--safari-v8-hover-label-width, 132px)
-  ) !important;
-  min-width: 0 !important;
-  overflow: hidden !important;
-}
-
-#tabbrowser-tabs[orient="horizontal"]
-  .tabbrowser-tab.safari-v8-hover-controls
-  .tab-label {
-  min-width: 0 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-/*
- * Maximally compressed inactive tabs use exactly the same favicon/title
- * geometry before and during hover. Hover only shifts the complete content
- * group to make room for the fixed close control.
- */
-#tabbrowser-tabs[orient="horizontal"][overflow]
-  .tabbrowser-tab:not([pinned], [selected], [visuallyselected])
-  .tab-label-container,
-#tabbrowser-tabs[orient="horizontal"][overflow]
-  .tabbrowser-tab:not([pinned], [selected], [visuallyselected])
-  .tab-label[data-safari-display-label]::after {
-  width: 44px !important;
-  min-width: 0 !important;
-  max-width: 44px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
-/*
- * Reserve the close slot in both states. The favicon/title group therefore
- * stays completely still when the fixed close control appears.
- */
-#tabbrowser-tabs[orient="horizontal"][overflow]
-  .tabbrowser-tab:not([pinned], [selected], [visuallyselected])
-  > .tab-stack
-  > .tab-content {
-  grid-template-columns:
-    minmax(34px, 1fr)
-    16px
-    44px
-    minmax(0, 1fr)
-    !important;
-}
-
 /* Replace the inherited ~500 ms material fade with a short symmetric exit. */
 #tabbrowser-tabs[orient="horizontal"]
   .tabbrowser-tab:not([pinned], .safari-v8-address)
@@ -1813,3 +1755,4 @@
 }
 
 /* ===== SAFARI FIRST INACTIVE TAB INSET END ===== */
+

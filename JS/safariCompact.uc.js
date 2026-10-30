@@ -82,8 +82,6 @@
   let frame = 0;
   let settleTimer = 0;
   let resizeObserver = null;
-  let scrollButtonObserver = null;
-  let scrollButtonFrame = 0;
   let shelfProbeAnimationFrame = 0;
   let shelfProbeAnimationToken = 0;
   const shifted = new Set();
@@ -596,13 +594,7 @@
     closeButton.classList.remove("visible");
     urlbar.classList.remove("safari-v8-exact-close-hover");
     glyphSlot.classList.remove("safari-v8-close-mask");
-    tabCloseTarget?.classList.remove(
-      "safari-v8-close-over-icon",
-      "safari-v8-hover-controls"
-    );
-    tabCloseTarget?.style.removeProperty(
-      "--safari-v8-hover-label-width"
-    );
+    tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
 
     /*
      * The clean glyph is a separate root-level copy. Restore it only after
@@ -915,38 +907,15 @@
     });
   }
 
-  function tabScrollportRect() {
-    const scrollport = document.querySelector("#tabbrowser-arrowscrollbox");
-    if (!scrollport) return null;
-
-    const rect = scrollport.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 ? rect : null;
-  }
-
-  function visibleNormalTabs() {
-    const scrollport = tabScrollportRect();
-    if (!scrollport) return [];
-
-    return [...tabs.querySelectorAll(
+  function positionShelfGeometryProbe() {
+    const normalTabs = [...tabs.querySelectorAll(
       ".tabbrowser-tab:not([pinned], [hidden])"
     )].filter(tab => {
-      if (tab.closing) return false;
-
       const rect = tab.getBoundingClientRect();
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        rect.right > scrollport.left &&
-        rect.left < scrollport.right
-      );
+      return !tab.closing && rect.width > 0 && rect.height > 0;
     });
-  }
 
-  function positionShelfGeometryProbe() {
-    const scrollport = tabScrollportRect();
-    const normalTabs = visibleNormalTabs();
-
-    if (!scrollport || !normalTabs.length) {
+    if (!normalTabs.length) {
       shelfProbe.classList.remove("visible");
       return;
     }
@@ -985,13 +954,7 @@
     const rightLimit = plusRect && plusRect.width > 0
       ? plusRect.left - 8
       : desiredRight;
-    const right = Math.min(
-      desiredRight,
-      rightLimit,
-      scrollport.right
-    );
-    const clampedLeft = Math.max(left, scrollport.left);
-    const clampedRight = Math.max(clampedLeft, right);
+    const right = Math.min(desiredRight, rightLimit);
     /*
      * Background rectangles are visually scaled for selected and hovered
      * pills. Deriving shelf height from those painted rectangles made the
@@ -1023,9 +986,9 @@
         )
       : stableBottom;
 
-    shelfProbe.style.setProperty("--probe-left", `${clampedLeft}px`);
+    shelfProbe.style.setProperty("--probe-left", `${left}px`);
     shelfProbe.style.setProperty("--probe-top", `${top}px`);
-    shelfProbe.style.setProperty("--probe-width", `${Math.max(1, clampedRight - clampedLeft)}px`);
+    shelfProbe.style.setProperty("--probe-width", `${Math.max(1, right - left)}px`);
     shelfProbe.style.setProperty("--probe-height", `${Math.max(1, bottom - top)}px`);
     shelfProbe.classList.toggle("address-mode", visible);
     shelfProbe.classList.add("visible");
@@ -1190,102 +1153,6 @@
       ?.getBoundingClientRect() || null;
   }
 
-  function tabVisibleInScrollport(tab) {
-    const scrollport = tabScrollportRect();
-    if (!tab || !scrollport) return false;
-
-    const rect = tab.getBoundingClientRect();
-    return Boolean(
-      rect.width > 0 &&
-      rect.height > 0 &&
-      rect.right > scrollport.left + 1 &&
-      rect.left < scrollport.right - 1
-    );
-  }
-
-  function syncTabScrollButtons() {
-    const arrowscrollbox = document.querySelector(
-      "#tabbrowser-arrowscrollbox"
-    );
-    const root = arrowscrollbox?.shadowRoot;
-    if (!root) return;
-
-    const buttons = [
-      root.getElementById("scrollbutton-up"),
-      root.getElementById("scrollbutton-down")
-    ];
-
-    for (const button of buttons) {
-      if (!button) continue;
-      const hidden = button.disabled;
-      button.style.setProperty("opacity", hidden ? "0" : "1");
-      button.style.setProperty(
-        "visibility",
-        hidden ? "hidden" : "visible"
-      );
-      button.style.setProperty(
-        "pointer-events",
-        hidden ? "none" : "auto"
-      );
-    }
-  }
-
-  function scheduleTabScrollButtonSync() {
-    cancelAnimationFrame(scrollButtonFrame);
-    scrollButtonFrame = requestAnimationFrame(() => {
-      scrollButtonFrame = requestAnimationFrame(
-        syncTabScrollButtons
-      );
-    });
-  }
-
-  function observeTabScrollButtons() {
-    const arrowscrollbox = document.querySelector(
-      "#tabbrowser-arrowscrollbox"
-    );
-    const root = arrowscrollbox?.shadowRoot;
-    if (!root) return;
-
-    const buttons = [
-      root.getElementById("scrollbutton-up"),
-      root.getElementById("scrollbutton-down")
-    ].filter(Boolean);
-
-    scrollButtonObserver?.disconnect();
-    scrollButtonObserver = new MutationObserver(
-      syncTabScrollButtons
-    );
-
-    for (const button of buttons) {
-      scrollButtonObserver.observe(button, {
-        attributes: true,
-        attributeFilter: ["disabled"]
-      });
-    }
-
-    scheduleTabScrollButtonSync();
-  }
-
-  function reconcileTabCloseTarget() {
-    if (!tabCloseTarget) return;
-    if (
-      tabCloseTarget.hidden ||
-      tabCloseTarget.closing ||
-      !tabVisibleInScrollport(tabCloseTarget)
-    ) {
-      clearHoverTab(tabCloseTarget);
-      tabCloseTarget = null;
-      hideClose();
-      hideReload();
-      return;
-    }
-
-    if (!visible) {
-      showClose(tabCloseTarget);
-      showReload();
-    }
-  }
-
   function positionCloseButton() {
     const rect = controlTargetRect();
     if (!rect) return;
@@ -1315,28 +1182,8 @@
     }
   }
 
-  function compactHoverLabelWidth(tab) {
-    if (!tab) return 0;
-
-    const width = tab.getBoundingClientRect().width;
-    const reloadReserve =
-      tab === selectedTab() && canReloadSelectedTab() && width > 92
-        ? 52
-        : 0;
-    const reserve = 28 + reloadReserve;
-    return Math.max(0, width - reserve);
-  }
-
   function showClose(tab = null) {
     if (!visible) tabCloseTarget = tab;
-    if (tabCloseTarget && !visible) {
-      const labelWidth = compactHoverLabelWidth(tabCloseTarget);
-      tabCloseTarget.classList.add("safari-v8-hover-controls");
-      tabCloseTarget.style.setProperty(
-        "--safari-v8-hover-label-width",
-        `${labelWidth}px`
-      );
-    }
     closeHover = true;
     positionCloseButton();
     urlbar.classList.toggle("safari-v8-exact-close-hover", visible);
@@ -1353,14 +1200,6 @@
     }
 
     closeButton.classList.add("visible");
-  }
-
-  function clearHoverTab(tab) {
-    tab?.classList.remove(
-      "safari-v8-close-over-icon",
-      "safari-v8-hover-controls"
-    );
-    tab?.style.removeProperty("--safari-v8-hover-label-width");
   }
 
   function controlTargetTab() {
@@ -1408,14 +1247,7 @@
   }
 
   function showReload() {
-    const target = controlTargetTab();
-    const targetWidth = target?.getBoundingClientRect().width || 0;
-    if (
-      visible ||
-      target !== selectedTab() ||
-      targetWidth < 88 ||
-      !canReloadSelectedTab()
-    ) {
+    if (!canReloadSelectedTab()) {
       hideReload();
       return;
     }
@@ -1425,25 +1257,6 @@
     reloadButton.classList.add("visible");
   }
 
-  function forwardTabScrollWheel(event) {
-    const scrollbox = document.querySelector("#tabbrowser-arrowscrollbox");
-    if (!scrollbox || !event.deltaX && !event.deltaY) return;
-
-    const deltaX = event.deltaX || 0;
-    const deltaY = event.deltaY || 0;
-    const horizontal = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
-
-    if (horizontal !== 0) {
-      event.preventDefault();
-      scrollbox.scrollBy({ left: horizontal, top: 0 });
-    }
-  }
-
-  function onTabScroll() {
-    reconcileTabCloseTarget();
-    scheduleTabScrollButtonSync();
-  }
-
   function onPointerMove(event) {
     /*
      * Close and reload belong to the geometry captured at the beginning
@@ -1451,7 +1264,6 @@
      * while their shared FLIP animation is running.
      */
     if (navigationShiftInProgress) return;
-    reconcileTabCloseTarget();
     const onClose =
       event.target === closeButton || closeButton.contains(event.target);
     const onReload =
@@ -1481,7 +1293,9 @@
        */
       if (validTab) {
         if (hoveredTab !== tabCloseTarget) {
-          clearHoverTab(tabCloseTarget);
+          tabCloseTarget?.classList.remove(
+            "safari-v8-close-over-icon"
+          );
           tabCloseTarget = hoveredTab;
         }
 
@@ -1510,20 +1324,27 @@
        */
       if (insideUrlbar) {
         tabCloseTarget = null;
-        showClose();
-        hideReload();
+        const leading = event.clientX <= rect.left + 40;
+
+        if (leading) {
+          showClose();
+          hideReload();
+        } else {
+          hideClose();
+          showReload();
+        }
         return;
       }
 
       hideClose();
       hideReload();
-      clearHoverTab(tabCloseTarget);
+      tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
       tabCloseTarget = null;
       return;
     }
 
     if (validTab && hoveredTab !== tabCloseTarget) {
-      clearHoverTab(tabCloseTarget);
+      tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
       tabCloseTarget = hoveredTab;
     }
 
@@ -1539,7 +1360,7 @@
 
     hideClose();
     hideReload();
-    clearHoverTab(tabCloseTarget);
+    tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
     tabCloseTarget = null;
   }
 
@@ -1748,9 +1569,6 @@
   tabs.addEventListener("TabOpen", onTabOpen);
   urlbar.addEventListener("animationend", onNewTabAnimationEnd);
   layoutEvents.forEach(name => tabs.addEventListener(name, settle));
-  const scrollbox = document.querySelector("#tabbrowser-arrowscrollbox");
-  scrollbox?.addEventListener("scroll", onTabScroll, { passive: true });
-  observeTabScrollButtons();
   document.addEventListener("focusin", onFocusIn, true);
   document.addEventListener("focusout", onFocusOut, true);
   document.addEventListener("pointermove", onPointerMove, true);
@@ -1759,11 +1577,9 @@
   closeButton.addEventListener("pointerdown", blockClosePress, true);
   closeButton.addEventListener("mousedown", blockClosePress, true);
   closeButton.addEventListener("click", closeSelectedTab, true);
-  closeButton.addEventListener("wheel", forwardTabScrollWheel, { passive: false });
   reloadButton.addEventListener("pointerdown", blockReloadPress, true);
   reloadButton.addEventListener("mousedown", blockReloadPress, true);
   reloadButton.addEventListener("click", reloadSelectedTab, true);
-  reloadButton.addEventListener("wheel", forwardTabScrollWheel, { passive: false });
 
   glyphObserver = new MutationObserver(updateGlyph);
 
@@ -1807,20 +1623,6 @@
     newTabOpening = false;
     resizeObserver?.disconnect();
     glyphObserver?.disconnect();
-    scrollButtonObserver?.disconnect();
-    cancelAnimationFrame(scrollButtonFrame);
-
-    const arrowRoot = document.querySelector(
-      "#tabbrowser-arrowscrollbox"
-    )?.shadowRoot;
-    for (const button of [
-      arrowRoot?.getElementById("scrollbutton-up"),
-      arrowRoot?.getElementById("scrollbutton-down")
-    ]) {
-      button?.style.removeProperty("opacity");
-      button?.style.removeProperty("visibility");
-      button?.style.removeProperty("pointer-events");
-    }
     hideCleanGlyph();
     cleanGlyph.remove();
     addressSurface.remove();
@@ -1840,7 +1642,6 @@
     input.removeEventListener("focus", updateGlyph, true);
 
     layoutEvents.forEach(name => tabs.removeEventListener(name, settle));
-    scrollbox?.removeEventListener("scroll", onTabScroll);
     document.removeEventListener("focusin", onFocusIn, true);
     document.removeEventListener("focusout", onFocusOut, true);
     document.removeEventListener("pointermove", onPointerMove, true);
@@ -1849,11 +1650,9 @@
     closeButton.removeEventListener("pointerdown", blockClosePress, true);
     closeButton.removeEventListener("mousedown", blockClosePress, true);
     closeButton.removeEventListener("click", closeSelectedTab, true);
-    closeButton.removeEventListener("wheel", forwardTabScrollWheel);
     reloadButton.removeEventListener("pointerdown", blockReloadPress, true);
     reloadButton.removeEventListener("mousedown", blockReloadPress, true);
     reloadButton.removeEventListener("click", reloadSelectedTab, true);
-    reloadButton.removeEventListener("wheel", forwardTabScrollWheel);
     closeUrlbar();
     clearAddressState();
     document.documentElement.classList.remove("safari-v8-address-active");
