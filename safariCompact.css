@@ -34,7 +34,12 @@
 #urlbar.safari-v8-moving.safari-v8-visible {
   position: fixed !important;
 
-  left: var(--safari-v8-left) !important;
+  left:
+    calc(
+      var(--safari-v8-left) -
+      var(--safari-v8-left-shift, 0px)
+    )
+    !important;
   top: var(--safari-v8-top) !important;
 
   width:
@@ -71,7 +76,7 @@
   z-index: 1000 !important;
 
   transition:
-    width 150ms cubic-bezier(.2, .8, .2, 1),
+    width 100ms cubic-bezier(.2, .8, .2, 1),
     opacity 105ms ease-out
     !important;
 }
@@ -150,8 +155,24 @@
     !important;
 
   transition:
-    translate 150ms cubic-bezier(.2, .8, .2, 1)
+    translate 100ms cubic-bezier(.2, .8, .2, 1)
     !important;
+}
+
+/*
+ * From nine ordinary tabs onward the native new-tab button leaves the changing
+ * tab-row geometry and occupies one stable toolbar position immediately before
+ * the visible all-tabs button.
+ */
+:is(#tabs-newtab-button, #new-tab-button).safari-v8-detached-newtab {
+  position: fixed !important;
+  left: var(--safari-v8-detached-left) !important;
+  top: var(--safari-v8-detached-top) !important;
+  margin: 0 !important;
+  translate: none !important;
+  z-index: 2147482500 !important;
+  /* Toolbar anchoring must not interpolate through adjacent controls. */
+  transition: none !important;
 }
 
 /*
@@ -368,35 +389,49 @@
 #nav-bar #forward-button:not([disabled]) { opacity: 1 !important; scale: 1 !important; }
 #nav-bar #forward-button[disabled] { opacity: 0 !important; scale: .78 !important; }
 
-/* One-shot new-tab entrance; no observer and no feedback loop. */
-#urlbar.safari-v8-newtab-enter > #urlbar-background {
-  animation: safari-v8-newtab-background-in 190ms cubic-bezier(.2,.8,.2,1) both !important;
-}
+/*
+ * TabOpen exposes the final address contents immediately. Firefox's native tab
+ * width supplies the only opening motion; no delayed second content animation
+ * may replay after the row stabilizes.
+ */
+#urlbar.safari-v8-newtab-enter > #urlbar-background,
 #urlbar.safari-v8-newtab-enter > .urlbar-input-container {
-  animation: safari-v8-newtab-content-in 190ms cubic-bezier(.2,.8,.2,1) both !important;
+  animation: none !important;
 }
-#urlbar.safari-v8-newtab-enter #trust-icon {
-  animation: safari-v8-newtab-glyph-in 165ms 25ms cubic-bezier(.2,.8,.2,1) both !important;
+
+/*
+ * Native opening remains Firefox-owned. Only the subsequent address
+ * expansion shares Safe Push's 100 ms curve. Animate all three width
+ * constraints together; an immediate min-width would defeat width motion.
+ * GWfox-T's nested focus rule includes #urlbar inside :has(), giving its
+ * fill-only transition three ID selectors. Match that ID specificity here;
+ * the address-state classes then make this geometry transition win.
+ */
+:root.safari-v8-address-active
+  #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving.safari-v8-newtab-enter {
+  transition:
+    width 100ms cubic-bezier(.2, .8, .2, 1),
+    min-width 100ms cubic-bezier(.2, .8, .2, 1),
+    max-width 100ms cubic-bezier(.2, .8, .2, 1),
+    opacity 105ms ease-out
+    !important;
 }
-@keyframes safari-v8-newtab-background-in {
-  from { opacity: .48; scale: .97 .93; }
-  to { opacity: 1; scale: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root.safari-v8-address-active
+    #urlbar-container:has(#urlbar)
+    #urlbar.safari-v8-moving.safari-v8-newtab-enter {
+    transition: none !important;
+  }
 }
-@keyframes safari-v8-newtab-content-in {
-  from { opacity: 0; translate: -4px 0; }
-  to { opacity: 1; translate: 0 0; }
-}
-@keyframes safari-v8-newtab-glyph-in {
-  from { opacity: 0; scale: .76; }
-  to { opacity: 1; scale: 1; }
-}
+
 @media (prefers-reduced-motion: reduce) {
   #nav-bar #back-button,
   #nav-bar #back-button > .toolbarbutton-icon,
-  #nav-bar #forward-button { transition: none !important; }
-  #urlbar.safari-v8-newtab-enter > #urlbar-background,
-  #urlbar.safari-v8-newtab-enter > .urlbar-input-container,
-  #urlbar.safari-v8-newtab-enter #trust-icon { animation: none !important; }
+  #nav-bar #forward-button {
+    transition: none !important;
+  }
 }
 
 /* Safari-like reload control at the trailing edge of the selected tab. */
@@ -442,6 +477,10 @@
 }
 
 #safari-v8-tab-reload.visible {
+  color: light-dark(rgb(18, 18, 18), rgb(248, 248, 250)) !important;
+  fill: light-dark(rgb(18, 18, 18), rgb(248, 248, 250)) !important;
+  fill-opacity: 1 !important;
+  filter: none !important;
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
@@ -1613,8 +1652,13 @@
  */
 #urlbar.safari-v8-moving.safari-v8-visible
   .urlbar-input::selection {
-  color: rgb(0, 0, 0) !important;
-  background-color: rgb(93, 114, 255) !important;
+  color: light-dark(rgb(18, 18, 18), rgb(255, 255, 255)) !important;
+  background-color:
+    light-dark(
+      rgba(142, 142, 147, .42),
+      rgba(174, 174, 178, .34)
+    )
+    !important;
   text-shadow: none !important;
 }
 
@@ -1685,8 +1729,8 @@
 }
 
 #safari-v8-clean-glyph.visible {
-  opacity: 1 !important;
-  visibility: visible !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
 }
 
 /* ===== SAFARI CLEAN GLYPH ABOVE COMPOSITE END ===== */
@@ -1756,3 +1800,430 @@
 
 /* ===== SAFARI FIRST INACTIVE TAB INSET END ===== */
 
+
+
+/* ===== SAFARI DARK MODE AND OVERFLOW STABILIZATION START ===== */
+
+:root {
+  --safari-v8-address-foreground:
+    light-dark(
+      rgba(255, 255, 255, .96),
+      rgba(112, 112, 116, .72)
+    );
+  --safari-v8-address-edge:
+    light-dark(
+      rgba(60, 60, 67, .10),
+      rgba(255, 255, 255, .10)
+    );
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-input-container,
+#safari-v8-address-surface {
+  background: var(--safari-v8-address-foreground) !important;
+  background-color: var(--safari-v8-address-foreground) !important;
+  box-shadow: inset 0 0 0 .5px var(--safari-v8-address-edge) !important;
+}
+
+/*
+ * The real input container owns the opaque material. The former root-level
+ * blend surface stays disabled so it cannot conceal editable text.
+ */
+#safari-v8-address-surface,
+#safari-v8-address-surface.visible {
+  mix-blend-mode: normal !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  z-index: 2147482000 !important;
+}
+
+#safari-v8-clean-glyph {
+  z-index: 2147483620 !important;
+}
+
+#safari-v8-exact-close,
+#safari-v8-tab-reload {
+  z-index: 2147483647 !important;
+}
+
+/* Editing starts at the leading edge; the returned tab label stays centred. */
+#urlbar.safari-v8-moving.safari-v8-visible:is(
+  [focused],
+  [usertyping],
+  [breakout-extend]
+) .urlbar-input,
+#urlbar.safari-v8-moving.safari-v8-visible:is(
+  [focused],
+  [usertyping],
+  [breakout-extend]
+) .urlbar-input::placeholder {
+  text-align: start !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible
+  .urlbar-input::placeholder {
+  color:
+    light-dark(
+      rgb(72, 72, 74),
+      rgb(218, 218, 220)
+    )
+    !important;
+}
+
+/*
+ * In overflow mode the hidden selected source tab expands in real layout.
+ * Firefox therefore pushes neighbouring tabs and keeps the result clipped
+ * inside its scrollport instead of translating content over toolbar icons.
+ */
+#tabbrowser-tabs[orient="horizontal"][overflow]
+  .tabbrowser-tab.safari-v8-source-expanded {
+  --safari-v8-expanded-width:
+    calc(
+      var(--safari-v8-source-width) +
+      var(--safari-v8-source-expand, 0px)
+    );
+
+  flex: 0 0 var(--safari-v8-expanded-width) !important;
+  width: var(--safari-v8-expanded-width) !important;
+  min-width: var(--safari-v8-expanded-width) !important;
+  max-width: var(--safari-v8-expanded-width) !important;
+  transition: none !important;
+}
+
+/*
+ * Compressed inactive tabs permanently reserve a leading close-control slot.
+ * Favicon/title geometry is identical before and during hover.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-compact-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  )
+  > .tab-stack
+  > .tab-content {
+  grid-template-columns:
+    24px
+    16px
+    minmax(0, 1fr)
+    !important;
+  column-gap: 2px !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-compact-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  )
+  .tab-label-container {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: min(160px, 100%) !important;
+  visibility: visible !important;
+  overflow: hidden !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-compact-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  )
+  .tab-label[data-safari-display-label],
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-compact-tab:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  )
+  .tab-label[data-safari-display-label]::after {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  visibility: visible !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/*
+ * Keep the favicon visible only for ordinary inactive-tab hover. Address mode
+ * deliberately hides the source tab content so the close control cannot be
+ * painted together with a duplicate favicon.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not(
+    [pinned],
+    [busy],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  ):hover
+  .tab-icon-image {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/*
+ * Close and reload share the same restrained hover material.
+ */
+#safari-v8-exact-close.visible,
+#safari-v8-tab-reload.visible {
+  /*
+   * The controls live at document root, so light-dark() follows the window
+   * rather than the actual tab material. JavaScript copies the owning tab's
+   * resolved text colour instead, yielding black on light tabs and white on
+   * dark tabs.
+   */
+  color: var(--safari-v8-control-color, rgb(18, 18, 18)) !important;
+  fill: var(--safari-v8-control-color, rgb(18, 18, 18)) !important;
+  fill-opacity: 1 !important;
+}
+
+#safari-v8-exact-close.visible:hover,
+#safari-v8-tab-reload.visible:hover {
+  background-color: color-mix(in srgb, currentColor 14%, transparent) !important;
+  box-shadow: none !important;
+}
+
+/*
+ * When the selected address tab crosses a scrollport edge, its visible surface
+ * is a continuation rather than a complete pill.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible.safari-v8-clipped-start
+  > .urlbar-input-container {
+  margin-inline-start: 0 !important;
+  border-start-start-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+}
+
+#urlbar.safari-v8-moving.safari-v8-visible.safari-v8-clipped-end
+  > .urlbar-input-container {
+  margin-inline-end: 0 !important;
+  border-start-end-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+
+/*
+ * A clipped shelf or hover surface is a continuation, not a shortened pill.
+ * Square only the side crossing the scrollport while retaining the rounded
+ * end at the true beginning or end of the tab sequence.
+ */
+#safari-v8-shelf-geometry-probe.continues-before {
+  border-inline-start-width: 0 !important;
+  border-start-start-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+}
+
+#safari-v8-shelf-geometry-probe.continues-after {
+  border-inline-end-width: 0 !important;
+  border-start-end-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"][overflow]
+  .tabbrowser-tab.safari-v8-clipped-start:hover
+  > .tab-stack
+  > .tab-background {
+  scale: 1 .833 !important;
+  transform-origin: right center !important;
+  border-start-start-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+}
+
+#tabbrowser-tabs[orient="horizontal"][overflow]
+  .tabbrowser-tab.safari-v8-clipped-end:hover
+  > .tab-stack
+  > .tab-background {
+  scale: 1 .833 !important;
+  transform-origin: left center !important;
+  border-start-end-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+
+/*
+ * Firefox snaps wheel scrolling to tab boundaries. The selected source tab is
+ * intentionally wider while its address surface is open; excluding only that
+ * temporary layout proxy from snap targets prevents an end-adjacent wheel
+ * step from jumping by the expanded tab's full width.
+ */
+#tabbrowser-tabs[orient="horizontal"][overflow]
+  .tabbrowser-tab.safari-v8-source-expanded {
+  scroll-snap-align: none !important;
+}
+
+/*
+ * Keep Firefox's original overflow-arrow presentation. Only hide an exhausted
+ * direction; geometry and hover material remain owned by the native theme.
+ */
+#tabbrowser-arrowscrollbox::part(scrollbutton-up):disabled,
+#tabbrowser-arrowscrollbox::part(scrollbutton-down):disabled,
+#scrollbutton-up[disabled],
+#scrollbutton-down[disabled] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Clip scrolled tab painting without changing the native scroll mechanism. */
+#tabbrowser-arrowscrollbox::part(scrollbox) {
+  clip-path: inset(0) !important;
+  contain: paint !important;
+}
+
+/* ===== SAFARI DARK MODE AND OVERFLOW STABILIZATION END ===== */
+
+
+/* ===== SAFARI FINAL NEW-TAB TRANSACTION HARDENING START ===== */
+
+/*
+ * GWfox-T can inject a search-glass pseudo-element into the input container.
+ * Safari Compact already paints the resolved Firefox trust glyph, so suppress
+ * the pseudo-element while the address surface is active. This guarantees one
+ * search glass or favicon, never a destination shadow or duplicate glyph.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-input-container::before,
+#urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-input-container::after {
+  content: none !important;
+  display: none !important;
+  background-image: none !important;
+  list-style-image: none !important;
+  mask-image: none !important;
+}
+
+/*
+ * This final selector intentionally appears after the shelf stacking rules.
+ * At nine ordinary tabs the new-tab button is fixed immediately before the
+ * visible all-tabs button and no longer participates in tab-row reflow.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  :is(#tabs-newtab-button, #new-tab-button).safari-v8-detached-newtab,
+:is(#tabs-newtab-button, #new-tab-button).safari-v8-detached-newtab {
+  position: fixed !important;
+  left: var(--safari-v8-detached-left) !important;
+  top: var(--safari-v8-detached-top) !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  translate: none !important;
+  z-index: 2147482500 !important;
+}
+
+/* Keep the real glyph as the sole painted handoff element. */
+#safari-v8-clean-glyph,
+#safari-v8-clean-glyph.visible {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* ===== SAFARI FINAL NEW-TAB TRANSACTION HARDENING END ===== */
+
+/* ===== SAFARI SHARED NATIVE OPENING ===== */
+/*
+ * JavaScript samples native eased opening progress. Do not add another
+ * transition to those per-frame width and push values.
+ */
+:root.safari-v8-address-active.safari-v8-shared-opening
+  #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving {
+  transition: opacity 105ms ease-out !important;
+}
+
+:root.safari-v8-shared-opening .tabbrowser-tab.safari-v8-pushed,
+:root.safari-v8-shared-opening #tabs-newtab-button.safari-v8-pushed,
+:root.safari-v8-shared-opening #new-tab-button.safari-v8-pushed {
+  transition: none !important;
+}
+
+/* ===== SAFARI DETACHED PLUS LAYOUT RESERVATION ===== */
+/*
+ * The fixed plus occupies no flex space. Leave native layout room for its
+ * boundary and the visual address expansion instead of clipping the overlap.
+ * The reserve is independent of focus and native overflow state.
+ */
+#tabbrowser-tabs[orient="horizontal"]:has(.safari-v8-detached-newtab)
+  #tabbrowser-arrowscrollbox {
+  margin-inline-end: var(--safari-v8-trailing-reserve, 0px) !important;
+}
+
+/* ===== SAFARI NATIVE OVERFLOW SPACE AND EDGE ===== */
+/*
+ * Overflow uses a real expanded source tab and Firefox's toolbar plus.
+ * The non-overflow visual expansion reserve must not be counted again.
+ */
+#tabbrowser-tabs[orient="horizontal"][overflow]:has(.safari-v8-detached-newtab)
+  #tabbrowser-arrowscrollbox {
+  margin-inline-end: 0px !important;
+}
+
+/* Bridge native disabled-state propagation using actual end geometry only. */
+#tabbrowser-tabs.safari-v8-at-scroll-end
+  #tabbrowser-arrowscrollbox::part(scrollbutton-down) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ===== SAFARI OVERFLOW DIRECT GEOMETRY ===== */
+/*
+ * In overflow the real source tab owns width and native scrolling owns motion.
+ * A second address-width transition lags behind clipping and can paint across
+ * toolbar controls. Ordinary non-overflow opening keeps its approved curve.
+ */
+:root.safari-v8-address-active:has(#tabbrowser-tabs[overflow])
+  #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving {
+  transition: opacity 105ms ease-out !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.safari-v8-address-active:has(#tabbrowser-tabs[overflow])
+    #urlbar-container:has(#urlbar)
+    #urlbar.safari-v8-moving {
+    transition: none !important;
+  }
+}
+
+/* ===== SAFARI FULLY OFFSCREEN ADDRESS ===== */
+/*
+ * A fully scrolled-out fixed address must paint nothing. A one-pixel outer
+ * width alone still lets its inner padding, glyph and rounded surface escape.
+ * Keep focus and address ownership intact; restore painting on re-entry.
+ */
+#urlbar.safari-v8-moving.safari-v8-outside-scrollport {
+  clip-path: inset(0 100% 0 0) !important;
+  pointer-events: none !important;
+}
+
+/* Hold viewport space until real source expansion has been committed.
+ * Releasing the margin during native opening caused overflow feedback.
+ * This changes no ordinary opening timing or settled overflow spacing.
+ */
+:root.safari-v8-opening-reserve
+  #tabbrowser-tabs[orient="horizontal"]:has(.safari-v8-detached-newtab)
+  #tabbrowser-arrowscrollbox {
+  margin-inline-end: var(--safari-v8-trailing-reserve, 0px) !important;
+}
+
+/* ===== SAFARI STABLE OVERFLOW INDICATOR SPACE ===== */
+/*
+ * Native collapse removes the themed indicator's width and negative margins.
+ * Keep that space at exhausted edges so scroll geometry cannot oscillate.
+ * Native attributes still decide when each indicator is hidden.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox[scrolledtostart]::part(overflow-start-indicator),
+#tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox[scrolledtoend]::part(overflow-end-indicator) {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
