@@ -38,11 +38,18 @@
   shelfProbe.setAttribute("aria-hidden", "true");
 
   /*
-   * Keep the decorative shelf in the same stacking context as the real
-   * tabs. Position: fixed still uses viewport coordinates, while DOM
-   * placement guarantees that selected tab surfaces paint above it.
+   * Keep the shelf below both address and native tab surfaces.
+   * TabsToolbar paints above nav-bar; placing the shelf inside TabsToolbar
+   * also tinted the address field underneath that toolbar.
+   * Fixed positioning retains the existing viewport geometry.
    */
-  tabs.prepend(shelfProbe);
+  const shelfPaintHost = document.querySelector("#nav-bar");
+  if (!shelfPaintHost) {
+    closeButton.remove();
+    reloadButton.remove();
+    return;
+  }
+  shelfPaintHost.prepend(shelfProbe);
 
   /*
    * External compositing surface. This is the only tested paint position
@@ -120,6 +127,10 @@
   }
 
   function compactSafariDisplayLabel(tab, fullLabel) {
+    if (noScrollLayoutEnabled()) {
+      tab.classList.remove("safari-v8-compact-tab");
+      return fullLabel;
+    }
     const compact =
       tabs.hasAttribute("overflow") ||
       tab.getBoundingClientRect().width < 168;
@@ -670,7 +681,7 @@
      * the close-hover state and its mask have been removed.
      */
     if (visible) {
-      queueMicrotask(updateCleanGlyph);
+      queueMicrotask(updateGlyph);
     }
   }
 
@@ -697,9 +708,189 @@
       glyphHandoffAnimation = null;
       hideClose();
     }
+    if (noScrollLayoutEnabled()) updateNoScrollLayout();
+  }
+
+  let contentHandoffAnimations = [];
+
+  function cancelContentHandoff() {
+    for (const animation of contentHandoffAnimations) animation.cancel();
+    contentHandoffAnimations = [];
+  }
+
+  function animateContentHandoff(element, deltaX) {
+    if (!element || !Number.isFinite(deltaX) ||
+        Math.abs(deltaX) < 0.5 ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const animation = element.animate(
+      [
+        { translate: `${deltaX}px 0px` },
+        { translate: "0px 0px" }
+      ],
+      { duration: 125, easing: "cubic-bezier(.2, .8, .2, 1)" }
+    );
+    contentHandoffAnimations.push(animation);
+    animation.finished.catch(() => null).then(() => {
+      contentHandoffAnimations =
+        contentHandoffAnimations.filter(item => item !== animation);
+    });
+  }
+
+  function noScrollLayoutEnabled() {
+    return document.documentElement.classList.contains(
+      "safari-v8-no-scroll"
+    );
+  }
+
+  function positionNoScrollAddress() {
+    updateNoScrollLayout();
+    const tab = selectedTab();
+    if (!tab) return;
+
+    const rect = tab.getBoundingClientRect();
+    // Native URL focus can select a different color scheme than the source tab.
+    // Resolve the address material in the source content's scheme instead.
+    const sourceContent = tab.querySelector(".tab-content") || tab;
+    const sourceScheme = getComputedStyle(sourceContent).colorScheme;
+    if (urlbar.style.getPropertyValue("--safari-v8-source-scheme") !== sourceScheme) {
+      urlbar.style.setProperty("--safari-v8-source-scheme", sourceScheme);
+    }
+    // Address paint must use the same endpoint allocation as its source tab.
+    // The source stack starts one native border pixel inside the tab.
+    for (const name of ["--safari-v8-pill-start", "--safari-v8-pill-end"]) {
+      const value = tab.style.getPropertyValue(name);
+      if (urlbar.style.getPropertyValue(name) !== value) {
+        urlbar.style.setProperty(name, value);
+      }
+    }
+    urlbar.classList.remove(
+      "safari-v8-clipped-start",
+      "safari-v8-clipped-end",
+      "safari-v8-outside-scrollport"
+    );
+    urlbar.style.setProperty("--safari-v8-expand", "0px");
+    urlbar.style.setProperty("--safari-v8-left-shift", "0px");
+    urlbar.style.setProperty("--safari-v8-left", `${rect.left}px`);
+    urlbar.style.setProperty("--safari-v8-top", `${rect.top + 4}px`);
+    urlbar.style.setProperty(
+      "--safari-v8-width", `${Math.max(1, rect.width)}px`
+    );
+    urlbar.style.setProperty(
+      "--safari-v8-height", `${Math.max(1, rect.height - 8)}px`
+    );
+  }
+
+  // XUL's native [flex="1"] !important overrides userChrome flex rules.
+  // Remove only the conflicting presentation attributes, restoring on cleanup.
+  const noScrollFlexAttributes = new Map();
+  let noScrollShadowStyle = null;
+
+  function releaseNativeFlex(element) {
+    if (!element || !element.hasAttribute("flex")) return;
+    if (!noScrollFlexAttributes.has(element)) {
+      noScrollFlexAttributes.set(element, element.getAttribute("flex"));
+    }
+    element.removeAttribute("flex");
+  }
+
+  function updateNoScrollLayout() {
+    const arrow = document.querySelector("#tabbrowser-arrowscrollbox");
+    releaseNativeFlex(arrow);
+    // Style inside the shadow root: hidden native arrows still occupied 28px
+    // on each side when the external ::part rules did not take effect.
+    if (arrow?.shadowRoot && !noScrollShadowStyle) {
+      noScrollShadowStyle = document.createElementNS(
+        "http://www.w3.org/1999/xhtml", "style"
+      );
+      noScrollShadowStyle.textContent = `
+        [part="scrollbutton-up"], [part="scrollbutton-down"],
+        [part="overflow-start-indicator"], [part="overflow-end-indicator"] {
+          display: none !important;
+        }
+        [part="scrollbox"], [part="items-wrapper"] {
+          min-width: 0 !important;
+        }
+      `;
+      arrow.shadowRoot.appendChild(noScrollShadowStyle);
+    }
+    const normalTabs = [...gBrowser.tabs].filter(
+      tab => !tab.hidden && !tab.closing && !tab.pinned
+    );
+    if (!normalTabs.length) return;
+
+    const container = tabs.getBoundingClientRect();
+    const style = getComputedStyle(tabs);
+    const padding =
+      (Number.parseFloat(style.paddingLeft) || 0) +
+      (Number.parseFloat(style.paddingRight) || 0);
+    const pinned = document.querySelector("#pinned-tabs-container");
+    const pinnedWidth = pinned?.getBoundingClientRect().width || 0;
+    const available = Math.max(0, container.width - padding - pinnedWidth);
+    if (available <= 0) return;
+
+    /*
+     * Equal tab shares fill a centered shelf that reaches the available
+     * row width at four tabs. Editing changes content alignment only.
+     * The four-tab threshold follows the requested reference behavior.
+     */
+    // One centered quarter, then half, three quarters and full width.
+    // Highlight never participates in this allocation.
+    const count = normalTabs.length;
+    const rowWidth = Math.min(available, window.innerWidth * count / 4);
+    const equalWidth = rowWidth / count;
+    // Highlight changes content alignment, never tab allocation.
+    const editingWidth = equalWidth;
+
+    const setPixels = (name, value) => {
+      const next = `${value.toFixed(3)}px`;
+      if (tabs.style.getPropertyValue(name) !== next) {
+        tabs.style.setProperty(name, next);
+      }
+    };
+    setPixels("--safari-v8-row-width", rowWidth);
+    setPixels("--safari-v8-edit-width", editingWidth);
+    const start = container.left +
+      (Number.parseFloat(style.paddingLeft) || 0) + pinnedWidth;
+    setPixels("--safari-v8-row-offset",
+      Math.max(0, Math.min(available - rowWidth,
+        (window.innerWidth - rowWidth) / 2 - start)));
+
+    const active = selectedTab();
+    for (const [index, tab] of normalTabs.entries()) {
+      // The native tab's leading border already contributes one pixel.
+      // Only shelf endpoints need a full inset; internal seams stay narrow.
+      const startInset = index === 0 ? "2px" : "0px";
+      const endInset = index === normalTabs.length - 1 ? "3px" : "0px";
+      if (tab.style.getPropertyValue("--safari-v8-pill-start") !== startInset) {
+        tab.style.setProperty("--safari-v8-pill-start", startInset);
+      }
+      if (tab.style.getPropertyValue("--safari-v8-pill-end") !== endInset) {
+        tab.style.setProperty("--safari-v8-pill-end", endInset);
+      }
+      releaseNativeFlex(tab.querySelector(".tab-label-container"));
+      tab.classList.toggle(
+        "safari-v8-address",
+        visible && tab === active
+      );
+    }
+
+    // Read after the shared layout variables and address owner are applied.
+    for (const tab of normalTabs) {
+      tab.classList.toggle(
+        "safari-v8-icon-only",
+        !(visible && tab === active) &&
+          tab.getBoundingClientRect().width < 64
+      );
+    }
   }
 
   function positionUrlbar() {
+    if (noScrollLayoutEnabled()) {
+      positionNoScrollAddress();
+      return;
+    }
     const tab = selectedTab();
     if (!tab) return;
 
@@ -765,6 +956,9 @@
   }
 
   function plusButton() {
+    if (noScrollLayoutEnabled()) {
+      return document.querySelector("#new-tab-button");
+    }
     return document.querySelector("#tabs-newtab-button") ||
       document.querySelector("#new-tab-button");
   }
@@ -804,6 +998,10 @@
   }
 
   function updatePlusPlacement(animate = false) {
+    if (noScrollLayoutEnabled()) {
+      updateNoScrollLayout();
+      return;
+    }
     const plus = plusButton();
     if (!plus) return;
 
@@ -957,6 +1155,12 @@
   }
 
   function applyPush(openingProgress = null) {
+    if (noScrollLayoutEnabled()) {
+      updateNoScrollLayout();
+      urlbar.style.setProperty("--safari-v8-expand", "0px");
+      urlbar.style.setProperty("--safari-v8-left-shift", "0px");
+      return;
+    }
     // During opening, only the geometry sampler may advance expansion.
     // Focus/navigation callbacks must not replace partial progress with 1.
     if (newTabOpening && openingProgress === null) return;
@@ -1150,9 +1354,17 @@
   }
 
   function applyGlyph(source) {
+    // Suppress the actual image while close owns the address glyph slot.
+    // The normal image is inline !important, so wrapper visibility alone
+    // is not a sufficient image-source mask.
+    const masked = glyphSlot.classList.contains("safari-v8-close-mask");
+    const resolvedSource = source || searchGlyph;
+    // Only the built-in search glyph accepts theme-aware context paint.
+    // Favicons retain their original colors and the existing close mask.
+    glyph.classList.toggle("safari-v8-search-glyph", resolvedSource === searchGlyph);
     glyph.style.setProperty(
       "list-style-image",
-      `url("${source || searchGlyph}")`,
+      masked ? "none" : `url("${resolvedSource}")`,
       "important"
     );
   }
@@ -1190,6 +1402,10 @@
     cleanGlyph.classList.remove("visible");
     glyph.style.removeProperty("opacity");
 
+    if (noScrollLayoutEnabled()) {
+      pendingGlyphHandoffRect = null;
+      return;
+    }
     if (!visible || !pendingGlyphHandoffRect) return;
 
     const rect = glyph.getBoundingClientRect();
@@ -1224,6 +1440,18 @@
       });
   }
 
+  function refreshAddressControls() {
+    if (!visible || navigationShiftInProgress || newTabOpening) return;
+    if (closeHover) positionCloseButton();
+    if (reloadHover) positionReloadButton();
+  }
+
+  function onAddressInput() {
+    // Input may precede Firefox's usertyping attribute update.
+    hideReload();
+    updateGlyph();
+  }
+
   function updateGlyph() {
     cancelAnimationFrame(glyphFrame);
     if (!visible || !urlbar.classList.contains("safari-v8-visible")) return;
@@ -1240,11 +1468,32 @@
       if (!visible) return;
       applyGlyph(resolveGlyph());
       updateCleanGlyph();
+      refreshAddressControls();
     });
   }
 
   function positionShelfGeometryProbe() {
-    const overflowing = tabs.hasAttribute("overflow");
+    if (noScrollLayoutEnabled()) {
+      const row = document.querySelector("#tabbrowser-arrowscrollbox");
+      const rect = row?.getBoundingClientRect();
+      const tab = selectedTab();
+      const tabRect = tab?.getBoundingClientRect();
+      if (!rect || !tabRect || rect.width <= 0) {
+        shelfProbe.classList.remove("visible");
+        return;
+      }
+      shelfProbe.style.setProperty("--probe-left", `${rect.left}px`);
+      shelfProbe.style.setProperty("--probe-top", `${tabRect.top + 4}px`);
+      shelfProbe.style.setProperty("--probe-width", `${rect.width}px`);
+      shelfProbe.style.setProperty("--probe-height",
+        `${Math.max(1, tabRect.height - 8)}px`);
+      shelfProbe.classList.remove("continues-before", "continues-after");
+      shelfProbe.classList.toggle("address-mode", visible);
+      shelfProbe.classList.add("visible");
+      return;
+    }
+    const overflowing = !noScrollLayoutEnabled() &&
+      tabs.hasAttribute("overflow");
     const scrollport = tabScrollportRect();
     const allNormalTabs = [...tabs.querySelectorAll(
       ".tabbrowser-tab:not([pinned], [hidden])"
@@ -1300,7 +1549,7 @@
       .querySelector(".tab-background")?.getBoundingClientRect();
     const plus = plusButton();
     const plusParticipates =
-      plus &&
+      !noScrollLayoutEnabled() && plus &&
       !plus.classList.contains("safari-v8-detached-newtab");
     const plusRect =
       plusParticipates
@@ -1409,6 +1658,10 @@
 
     const tick = now => {
       if (token !== shelfProbeAnimationToken) return;
+      if (noScrollLayoutEnabled()) {
+        positionUrlbar();
+        positionAddressSurface();
+      }
       positionShelfGeometryProbe();
 
       if (now - started < duration) {
@@ -1521,6 +1774,12 @@
      * change the source width and the new-tab button position.
      */
     if (visible && addressOwner === tab) {
+      // An already focused, fully selected address needs no second transaction.
+      if (document.activeElement === input &&
+          input.selectionStart === 0 &&
+          input.selectionEnd === input.value.length) {
+        return;
+      }
       gURLBar.focus();
       gURLBar.select();
       revealSelectedAddressFromStart();
@@ -1546,6 +1805,10 @@
      * Establish expansion from one stable compact width, then scroll the
      * measured expanded rectangle into view before the next painted frame.
      */
+    const contentOrigin = noScrollLayoutEnabled()
+      ? tab.querySelector(".tab-icon-stack")?.getBoundingClientRect()
+      : null;
+    if (noScrollLayoutEnabled()) cancelContentHandoff();
     setVisible(true);
     positionUrlbar();
     applyPush();
@@ -1554,7 +1817,22 @@
     positionAddressSurface();
     updateGlyph();
 
+    if (noScrollLayoutEnabled() && contentOrigin?.width > 0) {
+      pendingGlyphHandoffRect = null;
+      const destination = glyph.getBoundingClientRect();
+      const delta = contentOrigin.left + contentOrigin.width / 2 -
+        destination.left - destination.width / 2;
+      animateContentHandoff(glyphSlot, delta);
+      animateContentHandoff(
+        urlbar.querySelector(".urlbar-input-box") || input, delta
+      );
+    }
+
     requestAnimationFrame(() => {
+      if (noScrollLayoutEnabled() && (
+        !visible || addressOwner !== tab ||
+        selectedTab() !== tab || tab.closing || tab.hidden
+      )) return;
       gURLBar.focus();
       gURLBar.select();
       revealSelectedAddressFromStart();
@@ -1569,12 +1847,33 @@
     );
     const tab = selectedTab();
     const wasVisible = visible;
+    const previousAddressOwner = addressOwner;
+    const contentOrigin = noScrollLayoutEnabled() && wasVisible
+      ? glyph.getBoundingClientRect() : null;
+    if (noScrollLayoutEnabled()) cancelContentHandoff();
     hideCleanGlyph();
     setVisible(false);
     clearPush();
     positionAddressSurface();
     positionShelfGeometryProbe();
     followShelfGeometryAnimation();
+
+    if (noScrollLayoutEnabled() && wasVisible && tab) {
+      // Never transfer the previous address's motion to another tab.
+      if (previousAddressOwner !== tab || tab.closing || tab.hidden) {
+        return;
+      }
+      const icon = tab.querySelector(".tab-icon-stack");
+      const destination = icon?.getBoundingClientRect();
+      if (contentOrigin?.width > 0 && destination?.width > 0) {
+        animateContentHandoff(
+          tab.querySelector(".tab-content"),
+          contentOrigin.left + contentOrigin.width / 2 -
+            destination.left - destination.width / 2
+        );
+      }
+      return;
+    }
 
     if (wasVisible && tab && !newTabOpening) {
       tab.classList.remove("safari-v8-content-return");
@@ -1617,8 +1916,34 @@
     updateControlColor();
 
     const size = 18;
-    const centerX = rect.left + (visible ? 20 : 18);
-    const centerY = rect.top + rect.height / 2;
+    const target = controlTargetTab();
+    const addressTarget = visible && target === addressOwner;
+    // Ordinary hover belongs to the leading edge, not the centered favicon.
+    // Only address hover replaces the actual address glyph.
+    // Use the stationary slot, not the animated glyph's viewport rect.
+    const surface = addressTarget
+      ? inputContainer.getBoundingClientRect() : null;
+    const iconRect = noScrollLayoutEnabled() && surface
+      ? {
+          left: surface.left +
+            (parseFloat(getComputedStyle(inputContainer).paddingLeft) || 0),
+          top: surface.top,
+          width: 28,
+          height: surface.height
+        }
+      : null;
+    // Refresh ownership and masking even without a pointermove event.
+    if (closeHover) {
+      urlbar.classList.toggle("safari-v8-exact-close-hover", addressTarget);
+      glyphSlot.classList.toggle("safari-v8-close-mask", addressTarget);
+      applyGlyph(resolveGlyph());
+    }
+    const centerX = iconRect?.width > 0
+      ? iconRect.left + iconRect.width / 2
+      : rect.left + (addressTarget ? 20 : 18);
+    const centerY = iconRect?.height > 0
+      ? iconRect.top + iconRect.height / 2
+      : rect.top + rect.height / 2;
 
     closeButton.style.setProperty("--close-left", `${centerX - size / 2}px`);
     closeButton.style.setProperty("--close-top", `${centerY - size / 2}px`);
@@ -1630,16 +1955,28 @@
        */
       tabCloseTarget.classList.remove("safari-v8-close-over-icon");
     }
+    if (noScrollLayoutEnabled() && target) {
+      // The centered favicon remains visible during ordinary leading-edge hover.
+      target.classList.remove("safari-v8-close-over-icon");
+    }
   }
 
   function showClose(tab = null) {
-    if (!visible) tabCloseTarget = tab;
+    // Ownership must follow the requested tab even while another address is open.
+    if (tabCloseTarget !== tab) {
+      tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
+    }
+    tabCloseTarget = tab;
     closeHover = true;
     positionCloseButton();
-    urlbar.classList.toggle("safari-v8-exact-close-hover", visible);
+    const addressTarget = visible &&
+      (!noScrollLayoutEnabled() || controlTargetTab() === addressOwner);
+    urlbar.classList.toggle("safari-v8-exact-close-hover", addressTarget);
+    glyphSlot.classList.toggle("safari-v8-close-mask", addressTarget);
+    // Apply the source mask synchronously, before the close button paints.
+    applyGlyph(resolveGlyph());
 
-    if (visible) {
-      glyphSlot.classList.add("safari-v8-close-mask");
+    if (addressTarget) {
 
       /*
        * The clean glyph is painted above the compositing surface and would
@@ -1674,12 +2011,17 @@
     const tab = controlTargetTab();
     const spec = tab?.linkedBrowser?.currentURI?.spec || "";
     return Boolean(tab) &&
+      !(visible && urlbar.hasAttribute("usertyping")) &&
       spec !== "about:newtab" &&
       spec !== "about:home" &&
       spec !== "about:blank";
   }
 
   function positionReloadButton() {
+    if (visible && urlbar.hasAttribute("usertyping")) {
+      hideReload();
+      return;
+    }
     const rect = reloadTargetRect();
     if (!rect) return;
 
@@ -1731,6 +2073,7 @@
   }
 
   function forwardTabScrollWheel(event) {
+    if (noScrollLayoutEnabled()) return;
     // Forward once, and only while the horizontal tab strip can scroll.
     if (event.defaultPrevented || !tabs.hasAttribute("overflow")) return;
     const arrowscrollbox =
@@ -1813,6 +2156,7 @@
   }
 
   function scrollSelectedTabIntoView() {
+    if (noScrollLayoutEnabled()) return false;
     if (!tabs.hasAttribute("overflow")) return false;
 
     const tab = selectedTab();
@@ -1946,7 +2290,7 @@
         tabCloseTarget = null;
         const leading = event.clientX <= rect.left + 40;
 
-        if (leading) {
+        if (noScrollLayoutEnabled() || leading) {
           showClose();
           hideReload();
         } else {
@@ -2072,6 +2416,19 @@
   }
 
   function onTabSelect() {
+    if (noScrollLayoutEnabled()) {
+      cancelContentHandoff();
+      // Retire the old overlay before another tab can paint beneath it.
+      if (!newTabOpening && addressOwner !== selectedTab()) {
+        hideCleanGlyph();
+        setVisible(false);
+        positionAddressSurface();
+      }
+      updateNoScrollLayout();
+      positionUrlbar();
+      positionShelfGeometryProbe();
+      followShelfGeometryAnimation();
+    }
     updateSafariDisplayLabel(selectedTab());
 
     /*
@@ -2082,6 +2439,14 @@
 
     queueMicrotask(() => {
       if (newTabOpening) return;
+      // TabSelect may finish after TabOpen's address ownership transaction.
+      // Do not retire the new tab's already focused address surface.
+      const focused = document.activeElement;
+      if (visible && addressOwner === selectedTab() &&
+          (focused === input || urlbar.contains(focused))) {
+        settle();
+        return;
+      }
       closeUrlbar();
       settle();
     });
@@ -2095,8 +2460,16 @@
       return;
     }
 
+    if (noScrollLayoutEnabled() && visible &&
+        addressOwner !== selectedTab()) return;
     setVisible(true);
     render();
+    // Diagnostic only: capture the actual highlighted paint and stacking state.
+    requestAnimationFrame(() => {
+      if (!newTabOpening && visible && selectedTab()) {
+        traceNewTabGeometry(selectedTab(), newTabGeometryToken);
+      }
+    });
   }
 
   function onFocusOut() {
@@ -2134,6 +2507,12 @@
      * shelf and ownership logic unchanged.
      */
     newTabOpening = false;
+    // TabOpen can precede native selection: its initial address owner may
+    // still be the previous tab. Commit ownership to the validated new tab
+    // before finishing geometry, so Cmd+L cannot reopen the same surface.
+    if (visible && addressOwner !== openedTab) {
+      setVisible(true);
+    }
     updatePlusPlacement(true);
     positionUrlbar();
     /* Establish the compact start before committing synchronized growth. */
@@ -2163,6 +2542,15 @@
 
   function waitForStableNewTabGeometry(openedTab, token) {
     cancelAnimationFrame(newTabGeometryFrame);
+    if (noScrollLayoutEnabled()) {
+      // The new layout has no native min/max-width opening contract.
+      // Commit on the next frame; finishStableNewTab validates ownership.
+      newTabGeometryFrame = requestAnimationFrame(() => {
+        newTabGeometryFrame = 0;
+        finishStableNewTab(openedTab, token);
+      });
+      return;
+    }
 
     let previousSignature = "";
     let stableFrames = 0;
@@ -2307,7 +2695,117 @@
           "@mozilla.org/network/file-output-stream;1"
         ].createInstance(Components.interfaces.nsIFileOutputStream);
         const data = JSON.stringify({
-          token, error: error ? String(error.stack || error) : null, samples
+          token, error: error ? String(error.stack || error) : null, samples,
+          layoutDiagnostics: (() => {
+            const properties = [
+              "display", "width", "min-width", "max-width", "flex",
+              "box-sizing", "padding-left", "padding-right",
+              "margin-left", "margin-right", "justify-content",
+              "justify-self", "align-self", "grid-template-columns",
+              "grid-column", "grid-area", "background-color",
+              "color", "color-scheme", "opacity", "visibility",
+              "position", "z-index", "isolation", "transform", "scale",
+              "height", "margin-top", "margin-bottom",
+              "border-top-left-radius", "border-top-right-radius",
+              "border-bottom-left-radius", "border-bottom-right-radius",
+              "border-top-width", "border-left-width", "box-shadow",
+              "background-image", "mix-blend-mode", "filter", "backdrop-filter",
+              "--safari-v8-row-width", "--safari-v8-edit-width",
+              "--safari-v8-row-offset"
+            ];
+            const inspect = element => {
+              if (!element) return null;
+              const style = getComputedStyle(element);
+              return {
+                tag: element.localName,
+                id: element.id,
+                classes: element.getAttribute("class"),
+                rect: box(element),
+                bounds: (() => {
+                  const r = element.getBoundingClientRect();
+                  return {left: r.left, top: r.top, width: r.width, height: r.height};
+                })(),
+                style: Object.fromEntries(properties.map(
+                  name => [name, style.getPropertyValue(name)]
+                )),
+                inline: element.getAttribute("style")
+              };
+            };
+            const arrow = document.querySelector("#tabbrowser-arrowscrollbox");
+            return {
+              visualPolishDiagnostics: {
+                userAgent: navigator.userAgent,
+                devicePixelRatio: window.devicePixelRatio,
+                cornerShapeSupported: CSS.supports("corner-shape", "round"),
+                superellipseSupported: CSS.supports(
+                  "corner-shape", "superellipse(1.1)"
+                ),
+                controls: [closeButton, reloadButton].map(element => {
+                  const style = getComputedStyle(element);
+                  const r = element.getBoundingClientRect();
+                  return {
+                    id: element.id,
+                    classes: element.getAttribute("class"),
+                    bounds: {
+                      left: r.left, top: r.top,
+                      width: r.width, height: r.height
+                    },
+                    backgroundImage: style.backgroundImage,
+                    backgroundSize: style.backgroundSize,
+                    backgroundPosition: style.backgroundPosition,
+                    fill: style.fill,
+                    fillOpacity: style.fillOpacity,
+                    visibility: style.visibility,
+                    shadow: style.boxShadow
+                  };
+                })
+              },
+              rootClasses: document.documentElement.className,
+              viewport: window.innerWidth,
+              row: inspect(arrow),
+              shadow: arrow?.shadowRoot
+                ? [...arrow.shadowRoot.querySelectorAll("[part]")].map(inspect)
+                : [],
+              tabs: [...gBrowser.tabs].filter(
+                tab => !tab.hidden && !tab.closing && !tab.pinned
+              ).map(tab => ({
+                tab: inspect(tab),
+                stack: inspect(tab.querySelector(".tab-stack")),
+                background: inspect(tab.querySelector(".tab-background")),
+                content: inspect(tab.querySelector(".tab-content")),
+                children: [...(tab.querySelector(".tab-content")?.children || [])]
+                  .map(inspect)
+              })),
+              address: inspect(urlbar),
+              addressBackgrounds: [...urlbar.querySelectorAll(
+                ".urlbar-background, #urlbar-background"
+              )].map(inspect),
+              shelf: inspect(shelfProbe),
+              paintAncestors: [urlbar, shelfProbe].map(element => {
+                const chain = [];
+                for (let node = element; node; node = node.parentElement) {
+                  chain.push(inspect(node));
+                }
+                return chain;
+              }),
+              addressContainer: inspect(inputContainer),
+              addressInput: inspect(input),
+              leadingGlyph: inspect(glyph),
+              leadingGlyphSlot: inspect(glyphSlot),
+              inputBox: inspect(urlbar.querySelector(".urlbar-input-box")),
+              paintOrderAtAddress: (() => {
+                const r = inputContainer.getBoundingClientRect();
+                // Sample away from text and icons, inside the painted pill.
+                return document.elementsFromPoint(
+                  r.left + r.width * 0.75, r.top + r.height - 5
+                ).map(inspect);
+              })(),
+              selection: {
+                background: getComputedStyle(input, "::selection").backgroundColor,
+                color: getComputedStyle(input, "::selection").color
+              }
+            };
+          })()
         }, null, 2);
         stream.init(file, 0x02 | 0x08 | 0x20, 0o600, 0);
         try {
@@ -2430,15 +2928,24 @@
   }
 
   function onTabOpen(event) {
+    // A new tab must not inherit the previous tab's hover ownership
+    // or fixed control coordinates while opening geometry is changing.
+    hideClose();
+    hideReload();
+    tabCloseTarget = null;
+    clearTimeout(controlHideTimer);
+    cancelContentHandoff();
     clearTimeout(newTabFocusTimer);
     cancelAnimationFrame(newTabGeometryFrame);
 
     const openedTab = event.target;
     const token = ++newTabGeometryToken;
     newTabOpening = true;
-    document.documentElement.classList.add(
-      "safari-v8-opening-reserve"
-    );
+    if (!noScrollLayoutEnabled()) {
+      document.documentElement.classList.add(
+        "safari-v8-opening-reserve"
+      );
+    }
 
     /*
      * Replace Firefox's native "Ny flik" face inside TabOpen, before the next
@@ -2472,6 +2979,30 @@
     traceNewTabGeometry(openedTab, token);
   }
 
+  function onTabClose(event) {
+    if (!noScrollLayoutEnabled()) return;
+    // TabClose can precede Firefox's native closing attribute.
+    // Retire every painted descendant before clearing address ownership.
+    event.target.classList.add("safari-v8-retiring");
+    cancelContentHandoff();
+    hideClose();
+    hideReload();
+    if (event.target === addressOwner) {
+      hideCleanGlyph();
+      setVisible(false);
+      positionAddressSurface();
+    }
+    // TabClose precedes the native closing flag on some Firefox versions.
+    // Defer allocation to the event's completed native state, not a timer.
+    queueMicrotask(() => {
+      updateNoScrollLayout();
+      positionUrlbar();
+      positionAddressSurface();
+      positionShelfGeometryProbe();
+      followShelfGeometryAnimation();
+    });
+  }
+
   const layoutEvents = ["TabClose", "TabMove", "TabPinned", "TabUnpinned"];
 
   urlbar.classList.add("safari-v8-moving");
@@ -2479,6 +3010,7 @@
   tabs.addEventListener("click", onTabClick);
   tabs.addEventListener("TabSelect", onTabSelect);
   tabs.addEventListener("TabOpen", onTabOpen);
+  tabs.addEventListener("TabClose", onTabClose);
   layoutEvents.forEach(name => tabs.addEventListener(name, settle));
   const tabScrollbox = document.querySelector("#tabbrowser-arrowscrollbox");
   tabScrollbox?.addEventListener("scroll", onTabStripScroll, { passive: true });
@@ -2516,7 +3048,7 @@
     });
   }
 
-  input.addEventListener("input", updateGlyph, true);
+  input.addEventListener("input", onAddressInput, true);
   input.addEventListener("select", updateGlyph, true);
   input.addEventListener("focus", updateGlyph, true);
 
@@ -2527,6 +3059,22 @@
   resizeObserver.observe(toolbar);
 
   window.__safariCompactCleanup = () => {
+    noScrollShadowStyle?.remove();
+    noScrollShadowStyle = null;
+    for (const [element, value] of noScrollFlexAttributes) {
+      if (!element.hasAttribute("flex")) element.setAttribute("flex", value);
+    }
+    noScrollFlexAttributes.clear();
+    cancelContentHandoff();
+    document.documentElement.classList.remove("safari-v8-no-scroll");
+    tabs.style.removeProperty("--safari-v8-row-width");
+    tabs.style.removeProperty("--safari-v8-edit-width");
+    tabs.style.removeProperty("--safari-v8-row-offset");
+    for (const tab of gBrowser.tabs) {
+      tab.classList.remove("safari-v8-icon-only");
+      tab.style.removeProperty("--safari-v8-pill-start");
+      tab.style.removeProperty("--safari-v8-pill-end");
+    }
     document.documentElement.classList.remove(
       "safari-v8-opening-reserve"
     );
@@ -2568,9 +3116,10 @@
     tabs.removeEventListener("click", onTabClick);
     tabs.removeEventListener("TabSelect", onTabSelect);
     tabs.removeEventListener("TabOpen", onTabOpen);
+    tabs.removeEventListener("TabClose", onTabClose);
     tabs.removeEventListener("TabAttrModified", updateGlyph);
     tabs.removeEventListener("TabAttrModified", onSafariTabAttrModified);
-    input.removeEventListener("input", updateGlyph, true);
+    input.removeEventListener("input", onAddressInput, true);
     input.removeEventListener("select", updateGlyph, true);
     input.removeEventListener("focus", updateGlyph, true);
 
@@ -2612,7 +3161,11 @@
     );
     ["--safari-v8-left", "--safari-v8-top", "--safari-v8-width", "--safari-v8-height", "--safari-v8-expand", "--safari-v8-left-shift"]
       .forEach(property => urlbar.style.removeProperty(property));
+    urlbar.style.removeProperty("--safari-v8-source-scheme");
+    urlbar.style.removeProperty("--safari-v8-pill-start");
+    urlbar.style.removeProperty("--safari-v8-pill-end");
     glyph.style.removeProperty("list-style-image");
+    glyph.classList.remove("safari-v8-search-glyph");
     glyphSlot.classList.remove("safari-v8-close-mask");
     tabs.style.removeProperty("--safari-v8-trailing-reserve");
     tabs.classList.remove("safari-v8-at-scroll-end");
@@ -2625,6 +3178,21 @@
     delete window.__safariCompactCleanup;
   };
 
+  clearPush();
+  tabs.style.removeProperty("--safari-v8-trailing-reserve");
+  document.documentElement.classList.remove(
+    "safari-v8-opening-reserve"
+  );
+  for (const button of document.querySelectorAll(
+    "#tabs-newtab-button, #new-tab-button"
+  )) {
+    button.classList.remove("safari-v8-detached-newtab");
+    button.style.removeProperty("--safari-v8-detached-left");
+    button.style.removeProperty("--safari-v8-detached-top");
+  }
+  document.documentElement.classList.add("safari-v8-no-scroll");
+  updateNoScrollLayout();
   updateAllSafariDisplayLabels();
   settle();
+  traceNewTabGeometry(selectedTab(), newTabGeometryToken);
 })();

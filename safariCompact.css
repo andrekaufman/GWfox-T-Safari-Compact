@@ -520,8 +520,8 @@
 
   --safari-v8-active-tab:
     light-dark(
-      rgba(255, 255, 255, .96),
-      rgba(112, 112, 116, .72)
+      rgb(255, 255, 255),
+      rgb(43, 43, 45)
     );
 }
 
@@ -598,8 +598,8 @@
 
   --safari-v8-active-tab:
     light-dark(
-      rgba(255, 255, 255, .56),
-      rgba(120, 120, 124, .38)
+      rgb(255, 255, 255),
+      rgb(43, 43, 45)
     );
 }
 
@@ -1655,8 +1655,8 @@
   color: light-dark(rgb(18, 18, 18), rgb(255, 255, 255)) !important;
   background-color:
     light-dark(
-      rgba(142, 142, 147, .42),
-      rgba(174, 174, 178, .34)
+      rgb(166, 205, 255),
+      rgb(0, 82, 170)
     )
     !important;
   text-shadow: none !important;
@@ -1807,8 +1807,8 @@
 :root {
   --safari-v8-address-foreground:
     light-dark(
-      rgba(255, 255, 255, .96),
-      rgba(112, 112, 116, .72)
+      rgb(255, 255, 255),
+      rgb(43, 43, 45)
     );
   --safari-v8-address-edge:
     light-dark(
@@ -2226,4 +2226,1090 @@
   #tabbrowser-arrowscrollbox[scrolledtoend]::part(overflow-end-indicator) {
   visibility: hidden !important;
   pointer-events: none !important;
+}
+
+/* ===== SAFARI NO-SCROLL LAYOUT FOUNDATION ===== */
+/*
+ * Inactive until JavaScript enables safari-v8-no-scroll.
+ * JavaScript supplies one row width and one editing width.
+ * Native tab elements retain selection, navigation and drag ownership.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"] {
+  min-width: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox {
+  flex: 0 1 var(--safari-v8-row-width) !important;
+  width: var(--safari-v8-row-width) !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin-inline: auto !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox::part(scrollbox) {
+  min-width: 0 !important;
+  overflow: clip !important;
+  scroll-snap-type: none !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox::part(items-wrapper) {
+  min-width: 0 !important;
+  flex: 1 1 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox::part(scrollbutton-up),
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox::part(scrollbutton-down),
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox::part(overflow-start-indicator),
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox::part(overflow-end-indicator) {
+  display: none !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned]) {
+  position: relative !important;
+  inset-inline: auto !important;
+  flex: 1 1 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: var(--safari-v8-row-width) !important;
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+  translate: none !important;
+  scroll-snap-align: none !important;
+}
+
+/* One toolbar plus, independent of native overflow visibility switching. */
+:root.safari-v8-no-scroll #TabsToolbar #tabs-newtab-button {
+  display: none !important;
+}
+
+:root.safari-v8-no-scroll #TabsToolbar #new-tab-button {
+  display: flex !important;
+  position: relative !important;
+  inset: auto !important;
+  translate: none !important;
+  transform: none !important;
+  flex: 0 0 36px !important;
+  transition: none !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox-periphery {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-arrowscrollbox-periphery
+  .closing-tabs-spacer {
+  width: 0 !important;
+  min-width: 0 !important;
+}
+
+/* Favicon-only is a measured presentation state, not another layout mode. */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs
+  .tabbrowser-tab.safari-v8-icon-only:not([pinned])
+  > .tab-stack > .tab-content {
+  display: flex !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  padding-inline: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs
+  .tabbrowser-tab.safari-v8-icon-only:not([pinned])
+  .tab-label-container {
+  display: none !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs
+  .tabbrowser-tab.safari-v8-icon-only:not([pinned])
+  .tab-icon-stack {
+  margin-inline: 0 !important;
+}
+
+/* The source layout owns geometry; the address follows without a second curve. */
+:root.safari-v8-no-scroll
+  #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving {
+  transition: opacity 105ms ease-out !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.safari-v8-no-scroll
+    #urlbar-container:has(#urlbar)
+    #urlbar.safari-v8-moving {
+    transition: none !important;
+  }
+}
+
+/* ===== SAFARI NO-SCROLL CONTENT SIZING ===== */
+/*
+ * Override the old intrinsic grid and compressed close-control track.
+ * Content must shrink inside its assigned share without setting tab width.
+ */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned])
+  > .tab-stack > .tab-content {
+  display: flex !important;
+  min-width: 0 !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 5.5px !important;
+  padding-inline: 8px !important;
+  overflow: hidden !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned])
+  .tab-label-container {
+  flex: 0 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 32px) !important;
+  overflow: hidden !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned])
+  .tab-icon-stack {
+  flex: 0 0 16px !important;
+  margin-inline: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab.safari-v8-icon-only:not([pinned])
+  > .tab-stack > .tab-content {
+  gap: 0 !important;
+  padding-inline: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab.safari-v8-icon-only:not([pinned])
+  .tab-label-container {
+  display: none !important;
+}
+
+/* ===== SAFARI NO-SCROLL NATIVE TAB LIFECYCLE ===== */
+/*
+ * Keep a numeric max-width transition for Firefox's native transitionend
+ * bookkeeping. Flex allocation, not this upper bound, sets settled widths.
+ */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned]) {
+  transition:
+    max-width 160ms ease-out,
+    flex-grow 160ms ease-out
+    !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned]):not([fadein]),
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab[closing]:not([pinned]) {
+  flex: 0 1 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0.1px !important;
+  padding-inline: 0 !important;
+  margin-inline: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab[hidden] {
+  display: none !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned]) > .tab-stack {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.safari-v8-no-scroll
+    #tabbrowser-tabs[orient="horizontal"]
+    #tabbrowser-arrowscrollbox
+    .tabbrowser-tab:not([pinned]) {
+    transition: none !important;
+  }
+}
+
+/* No-scroll editing changes content alignment, never tab geometry. */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible .urlbar-input,
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible .urlbar-input::placeholder {
+  text-align: start !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-content-return
+  > .tab-stack > .tab-content {
+  animation: none !important;
+}
+
+/* ===== SAFARI CENTERED NO-SCROLL SHARES ===== */
+/* Auto margins center the bounded row within the available tab area. */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"] {
+  justify-content: center !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox {
+  flex: 0 0 var(--safari-v8-row-width) !important;
+  margin-inline: auto !important;
+}
+
+/* Remove inherited auto margins and asymmetric label padding.
+ * Center favicon and natural-width label together, not the label alone.
+ */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned])
+  .tab-label-container {
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+  flex-grow: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned])
+  .tab-label {
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+  flex-grow: 0 !important;
+}
+
+/* Animate the centered shelf's allocation alongside tab removal.
+ * Address geometry follows the actual layout through the existing sampler.
+ */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox {
+  transition:
+    width 160ms ease-out,
+    flex-basis 160ms ease-out
+    !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.safari-v8-no-scroll
+    #tabbrowser-tabs[orient="horizontal"]
+    #tabbrowser-arrowscrollbox {
+    transition: none !important;
+  }
+}
+
+/* ===== SAFARI NO-SCROLL OPENING GEOMETRY AUTHORITY ===== */
+/*
+ * Override the legacy new-tab width transition at higher specificity.
+ * The source tab owns opening geometry. The fixed address follows directly.
+ * Tab removal and row allocation transitions remain unchanged.
+ */
+:root.safari-v8-no-scroll.safari-v8-address-active
+  #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving.safari-v8-newtab-enter {
+  transition: opacity 105ms ease-out !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.safari-v8-no-scroll.safari-v8-address-active
+    #urlbar-container:has(#urlbar)
+    #urlbar.safari-v8-moving.safari-v8-newtab-enter {
+    transition: none !important;
+  }
+}
+
+/* No-scroll geometry: viewport-centered equal shares, including a lone tab. */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"] {
+  justify-content: flex-start !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox {
+  margin-inline-start: var(--safari-v8-row-offset, 0px) !important;
+  margin-inline-end: 0 !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:not([pinned], [hidden]) {
+  display: flex !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned])
+  > .tab-stack > .tab-content {
+  margin-inline: 0 !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned])
+  .tab-label-container {
+  width: fit-content !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned])
+  .tab-label[data-safari-display-label],
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned])
+  .tab-label[data-safari-display-label]::after {
+  width: fit-content !important;
+  max-width: 100% !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab.safari-v8-close-over-icon
+  .tab-icon-stack {
+  opacity: 0 !important;
+}
+
+/* Keep native closing bookkeeping, but collapse from one actual tab share.
+ * A row-wide max-width delayed the visible collapse until its last frames.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned]) {
+  max-width: var(--safari-v8-edit-width) !important;
+  overflow: clip !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned]):not([fadein]),
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab[closing]:not([pinned]) {
+  max-width: 0.1px !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab[closing] > .tab-stack {
+  visibility: hidden !important;
+}
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox {
+  background: transparent !important;
+  box-shadow: none !important;
+  transition:
+    width 160ms ease-out,
+    flex-basis 160ms ease-out,
+    margin-inline-start 160ms ease-out !important;
+}
+:root.safari-v8-no-scroll #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving {
+  overflow: clip !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+    #tabbrowser-arrowscrollbox {
+    transition: none !important;
+  }
+}
+
+/* ===== SAFARI NO-SCROLL STACK ALLOCATION ===== */
+/*
+ * Tabs are flex containers in this mode. Their grid stack must fill the
+ * assigned share; otherwise content centers inside an intrinsic-width stack.
+ * Keep the inherited stack margins from adding asymmetric overflow.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned]) > .tab-stack {
+  flex: 1 1 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin-inline: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/*
+ * Preserve the theme's intentional hidden toolbar all-tabs control, including
+ * native overflow changes. Do not hide the navigation-bar control or customize UI.
+ */
+:root.safari-v8-no-scroll:not([customizing])
+  #TabsToolbar #alltabs-button {
+  display: none !important;
+}
+
+/*
+ * Descendants have their own visibility rules, including the busy pseudo-icon.
+ * Hiding only the parent stack does not suppress an explicitly visible child.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:is([closing], .safari-v8-retiring) > .tab-stack {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ===== SAFARI FIXED NO-SCROLL PILL INSETS ===== */
+/*
+ * Percentage-based horizontal scaling made the shelf reveal grow with tab
+ * width. Keep the existing vertical inset, but use a fixed horizontal inset.
+ * Only the painted background changes; content and hit boxes stay untouched.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned], .safari-v8-address)
+  > .tab-stack > .tab-background {
+  /* Real inset geometry keeps circular endcaps circular.
+   * The 44px tab contains a 36px shelf (4px inset) and a 30px pill
+   * (7px inset). Scaling only Y instead made the endcaps elliptical.
+   */
+  scale: none !important;
+  transform: none !important;
+  align-self: center !important;
+  box-sizing: border-box !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  margin-block: 7px !important;
+  border-radius: 15px !important;
+  margin-inline-start: var(--safari-v8-pill-start, 0px) !important;
+  margin-inline-end: var(--safari-v8-pill-end, 0px) !important;
+}
+
+/* Atomic material handoff: the source stack is hidden immediately.
+ * Fading the entire replacement exposes the gray shelf for 105ms.
+ * Content translation remains owned by the existing handoff animation.
+ */
+:root.safari-v8-no-scroll
+  #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving,
+:root.safari-v8-no-scroll.safari-v8-address-active
+  #urlbar-container:has(#urlbar)
+  #urlbar.safari-v8-moving:is(.safari-v8-visible, .safari-v8-newtab-enter) {
+  transition: none !important;
+}
+
+/* Match source-tab endpoints, without adding margins at internal seams. */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  margin-inline-start: calc(var(--safari-v8-pill-start, 2px) + 1px) !important;
+  margin-inline-end: var(--safari-v8-pill-end, 3px) !important;
+}
+
+/* One opaque material for selected and editing states.
+ * Dark gray is an initial calibration, not a sampled Safari color.
+ * Do not interpolate the selected background from transparent on Escape:
+ * the address surface and the returned tab must exchange paint atomically.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:is([selected], [visuallyselected]):not([pinned])
+  > .tab-stack > .tab-background {
+  transition: none !important;
+}
+
+/* Resolve the same material token at each actual painted surface. */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:is([selected], [visuallyselected]):not([pinned], .safari-v8-address)
+  > .tab-stack > .tab-background {
+  background: var(--safari-v8-active-tab) !important;
+  backdrop-filter: none !important;
+}
+
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  background: var(--safari-v8-active-tab) !important;
+}
+
+/* Mask the actual glyph, not only its wrapper: explicit descendant visibility
+ * and the glyph's own transition must not leave a search icon under close.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover
+  #trust-icon-container #trust-icon {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: none !important;
+}
+
+/* The compact trust slot is the sole leading icon owner.
+ * Native variant-B input-box backgrounds must not paint a second glass.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible .urlbar-input-box {
+  background-image: none !important;
+}
+
+/* Match the source tab's scheme, not Firefox's independent focused-field scheme. */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible {
+  color-scheme: var(--safari-v8-source-scheme, inherit) !important;
+}
+
+/* Identical edge treatment in both states.
+ * Inset-only paint preserves the measured 3px gap around the capsule;
+ * legacy external half-pixel shadows made the sides look tighter.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:is([selected], [visuallyselected]):not([pinned], .safari-v8-address)
+  > .tab-stack > .tab-background,
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  border: 0 !important;
+  outline: none !important;
+  border-radius: 15px !important;
+  box-shadow: inset 0 0 0 .5px var(--safari-v8-address-edge) !important;
+  background-image: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  mix-blend-mode: normal !important;
+}
+
+/* Shared reference-inspired active glass finish.
+ * Optical refinement only: preserve capsule geometry and hit testing.
+ * Dark material is translucent; both states share the same paint recipe.
+ * Directional inset reflections suggest a curved glass edge without
+ * changing the verified outer spacing or introducing backdrop filters.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:is([selected], [visuallyselected]):not([pinned], .safari-v8-address)
+  > .tab-stack > .tab-background,
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  background-color: light-dark(
+    rgb(255, 255, 255), rgba(255, 255, 255, .045)
+  ) !important;
+  background-image:
+    radial-gradient(
+      ellipse 32px 23px at 0% 0%,
+      light-dark(rgba(255, 255, 255, 0), rgba(255, 255, 255, .09)),
+      transparent 78%
+    ),
+    radial-gradient(
+      ellipse 28px 21px at 100% 100%,
+      light-dark(rgba(255, 255, 255, 0), rgba(255, 255, 255, .045)),
+      transparent 80%
+    ),
+    linear-gradient(
+      to bottom,
+      light-dark(rgba(255, 255, 255, 0), rgba(255, 255, 255, .12)) 0%,
+      light-dark(rgba(255, 255, 255, 0), rgba(255, 255, 255, .045)) 16%,
+      transparent 43%,
+      transparent 72%,
+      light-dark(rgba(255, 255, 255, 0), rgba(255, 255, 255, .025)) 100%
+    ) !important;
+  box-shadow:
+    inset 0 0 0 .5px light-dark(
+      rgba(60, 60, 67, .10), rgba(255, 255, 255, .16)
+    ),
+    inset 0 1px 1.5px -.5px light-dark(
+      rgba(255, 255, 255, .55), rgba(255, 255, 255, .28)
+    ),
+    inset .5px 0 1px -.5px light-dark(
+      rgba(255, 255, 255, .30), rgba(255, 255, 255, .16)
+    ),
+    inset -.5px -1px 1.5px -.5px light-dark(
+      rgba(60, 60, 67, .035), rgba(255, 255, 255, .09)
+    ) !important;
+}
+
+/* Reference-like close disc and larger reload artwork.
+ * Keep existing 18px hit boxes and all surface geometry unchanged.
+ */
+#safari-v8-exact-close.visible,
+#safari-v8-exact-close.visible:hover {
+  background-color: rgb(226, 226, 228) !important;
+  background-image: url("resource://content-accessible/close-12.svg") !important;
+  background-size: 10px 10px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  fill: rgb(72, 72, 74) !important;
+  fill-opacity: 1 !important;
+}
+
+#safari-v8-tab-reload,
+#safari-v8-tab-reload.visible {
+  background-image: url("chrome://global/skin/icons/reload.svg") !important;
+  background-size: 16px 16px !important;
+}
+
+/* The native go arrow owns the trailing slot during typing.
+ * Hide the custom reload immediately, including before JS refresh.
+ */
+:root.safari-v8-no-scroll:has(
+  #urlbar.safari-v8-visible[usertyping]
+) #safari-v8-tab-reload {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Mask every image source, including a possible native src attribute,
+ * without collapsing the leading slot or shifting editable text.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible.safari-v8-exact-close-hover
+  #trust-icon-container #trust-icon {
+  clip-path: inset(50%) !important;
+}
+
+/* Compact control artwork with unchanged hit targets.
+ * Both painted icons occupy a 14px canvas inside the existing 18px button.
+ * Close uses a background disc rather than shrinking its hit target.
+ */
+#safari-v8-exact-close.visible,
+#safari-v8-exact-close.visible:hover,
+#safari-v8-exact-close.visible:active {
+  background-color: transparent !important;
+  background-image:
+    url("resource://content-accessible/close-12.svg"),
+    radial-gradient(circle closest-side,
+      rgb(226, 226, 228) 96%, transparent 100%) !important;
+  background-size: 8px 8px, 14px 14px !important;
+  background-position: center, center !important;
+  background-repeat: no-repeat !important;
+  fill: rgb(72, 72, 74) !important;
+  fill-opacity: 1 !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+#safari-v8-tab-reload.visible,
+#safari-v8-tab-reload.visible:hover,
+#safari-v8-tab-reload.visible:active {
+  background-color: transparent !important;
+  background-size: 14px 14px !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  transition: fill-opacity 70ms ease-out !important;
+}
+
+#safari-v8-tab-reload.visible {
+  fill-opacity: .78 !important;
+}
+
+#safari-v8-tab-reload.visible:hover {
+  fill-opacity: 1 !important;
+}
+
+/* Compact 13px controls and reference-inspired circular reload.
+ * Preserve 18px hit targets and existing viewport anchors.
+ * Close remains invariant on hover; reload only changes fill opacity.
+ */
+#safari-v8-exact-close.visible,
+#safari-v8-exact-close.visible:hover,
+#safari-v8-exact-close.visible:active {
+  background-size: 7.5px 7.5px, 13px 13px !important;
+}
+
+#safari-v8-tab-reload.visible,
+#safari-v8-tab-reload.visible:hover,
+#safari-v8-tab-reload.visible:active {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22context-fill%22%20stroke-width%3D%221.45%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12.35%204.95A5.15%205.15%200%201%200%2013.1%208.7%22%2F%3E%3Cpath%20d%3D%22M12.35%201.85v3.1h-3.1%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") !important;
+  background-size: 13px 13px !important;
+  -moz-context-properties: fill, fill-opacity !important;
+}
+
+/* Vector control layers: independent geometry and hover opacity.
+ * Existing 18px hit targets and viewport anchors remain unchanged.
+ */
+#safari-v8-exact-close.visible,
+#safari-v8-exact-close.visible:hover,
+#safari-v8-exact-close.visible:active,
+#safari-v8-tab-reload.visible,
+#safari-v8-tab-reload.visible:hover,
+#safari-v8-tab-reload.visible:active {
+  background: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+/* Solid disc, not a radial-gradient approximation. */
+#safari-v8-exact-close::before {
+  content: "" !important;
+  position: absolute !important;
+  width: 13px !important;
+  height: 13px !important;
+  left: 2.5px !important;
+  top: 2.5px !important;
+  border-radius: 50% !important;
+  background: rgb(226, 226, 228) !important;
+  pointer-events: none !important;
+}
+
+#safari-v8-exact-close::after {
+  content: "" !important;
+  position: absolute !important;
+  width: 8px !important;
+  height: 8px !important;
+  left: 5px !important;
+  top: 5px !important;
+  background: rgb(72, 72, 74) !important;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%208%208%22%3E%3Cpath%20d%3D%22M1.6%201.6l4.8%204.8M6.4%201.6L1.6%206.4%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.25%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat !important;
+  pointer-events: none !important;
+}
+
+/* The disc and cross stay identical during hover and press. */
+#safari-v8-exact-close::before,
+#safari-v8-exact-close::after {
+  opacity: 1 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transition: none !important;
+}
+
+#safari-v8-tab-reload::before {
+  content: "" !important;
+  position: absolute !important;
+  width: 12px !important;
+  height: 14px !important;
+  left: 3px !important;
+  top: 2px !important;
+  background: currentColor !important;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2028%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.9%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M22%2016A10%2010%200%201%201%2012%206C13%206%2014%207%2015%207%22%2F%3E%3Cpath%20d%3D%22M11%203L15%207L11%2011%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center / contain no-repeat !important;
+  opacity: .76 !important;
+  transition: opacity 70ms ease-out !important;
+  pointer-events: none !important;
+}
+
+#safari-v8-tab-reload:hover::before {
+  opacity: 1 !important;
+}
+
+/* Final reload adjustment: slightly larger and counterclockwise.
+ * Transform artwork only; preserve the button anchor and hit target.
+ */
+#safari-v8-tab-reload::before {
+  transform-origin: center !important;
+  transform: rotate(0deg) scale(1.03) !important;
+}
+
+/* Subtle glass hover: surface paint only, never content opacity.
+ * Include root-level controls so crossing onto a button does not
+ * extinguish the owning active surface's hover illumination.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:is([selected], [visuallyselected]):not(
+    [pinned], .safari-v8-address
+  ):hover > .tab-stack > .tab-background,
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible:hover > .urlbar-input-container,
+:root.safari-v8-no-scroll:has(
+  #safari-v8-exact-close.visible:hover,
+  #safari-v8-tab-reload.visible:hover
+) #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  background-color: light-dark(
+    rgb(255, 255, 255), rgba(255, 255, 255, .09)
+  ) !important;
+}
+
+/* ===== SAFARI COMPACT TOOLBAR SPACE OWNERSHIP ===== */
+/*
+ * The real address is fixed over its source tab. Its old search-button
+ * placeholder must not reserve another 36px before the tab strip.
+ * Keep the anchor element and native back/forward geometry intact.
+ */
+:root.safari-v8-no-scroll:not([customizing])
+  #nav-bar #urlbar-container {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  flex: 0 0 0 !important;
+}
+
+/* Reload lives inside the active tab. Preserve the native stop control
+ * while loading, and preserve toolbar customization.
+ */
+:root.safari-v8-no-scroll:not([customizing])
+  #nav-bar #stop-reload-button:not([displaystop]) {
+  display: none !important;
+}
+
+/*
+ * The toolbar plus is a sibling of tabbrowser-tabs, not part of its row.
+ * Reserve its 36px button and two 8px margins in actual flex allocation.
+ * Previously the tab container consumed the entire toolbar and pushed
+ * the plus onto the extensions control.
+ */
+:root.safari-v8-no-scroll
+  #TabsToolbar-customization-target {
+  min-width: 0 !important;
+}
+
+:root.safari-v8-no-scroll
+  #TabsToolbar #tabbrowser-tabs[orient="horizontal"] {
+  flex: 1 1 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 52px) !important;
+}
+
+/* ===== SAFARI PLUS IN TRAILING CAPSULE ===== */
+/*
+ * Keep the native plus in its toolbar and preserve its command handling.
+ * Join the existing adjacent surfaces at the toolbar boundary instead of
+ * moving customizable widgets or changing navigation-button geometry.
+ */
+:root.safari-v8-no-scroll:not([customizing])
+  #TabsToolbar #new-tab-button {
+  width: 37.5px !important;
+  flex: 0 0 37.5px !important;
+  margin: 4px -1.5px 0 8px !important;
+  border-radius: 50% 0 0 50% !important;
+  clip-path: inset(-20px 1.5px -20px -20px);
+}
+
+:root.safari-v8-no-scroll:not([customizing])
+  #nav-bar #unified-extensions-button:not([hidden]) {
+  margin-inline-start: 0 !important;
+  border-radius: 0 !important;
+  /* The plus already clips its shared edge. Clipping this edge too
+   * exposed a 1.5px strip of toolbar between the two painted surfaces.
+   */
+  clip-path: inset(-20px 1.5px -20px 0);
+}
+
+/* 37.5px button + 8px leading margin - 1.5px shared seam. */
+:root.safari-v8-no-scroll:not([customizing])
+  #TabsToolbar #tabbrowser-tabs[orient="horizontal"] {
+  max-width: calc(100% - 44px) !important;
+}
+
+/* ===== SAFARI CAPSULE SHOULDER CALIBRATION ===== */
+/*
+ * Inner contour trial informed by normalized screenshot edge positions:
+ * shorten the inner horizontal shoulder to 15px at the existing 30px height.
+ * Keep outer shelf/panel calibration unchanged pending separate measurement.
+ * This does not establish Apple's exact contour.
+ * Keep paint recipes, dimensions, insets and hit targets unchanged.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned], .safari-v8-address)
+  > .tab-stack > .tab-background,
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:is([selected], [visuallyselected]):not([pinned], .safari-v8-address)
+  > .tab-stack > .tab-background,
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  border-radius: 15px !important;
+}
+
+:root.safari-v8-no-scroll #safari-v8-shelf-geometry-probe {
+  border-radius: 19.5px / 18px !important;
+}
+
+:root.safari-v8-no-scroll:not([customizing])
+  #TabsToolbar #new-tab-button {
+  border-radius: 19.5px 0 0 19.5px / 18px 0 0 18px !important;
+}
+
+:root.safari-v8-no-scroll:not([customizing])
+  #PanelUI-menu-button {
+  border-radius: 0 19.5px 19.5px 0 / 0 18px 18px 0 !important;
+}
+
+/* ===== SAFARI SEARCH GLYPH CONTEXT PAINT ===== */
+/*
+ * The native search SVG requires context-fill. The favicon-preservation
+ * rule intentionally disables it, so opt in only for the resolved search
+ * glyph. Reference screenshot stroke plateaus: light 122/122/123,
+ * dark 163/163/165. These are screenshot-informed, not universal Safari tokens.
+ * Preserve icon geometry, opacity, favicon colors and close-slot masking.
+ */
+#urlbar.safari-v8-moving.safari-v8-visible
+  #trust-icon.safari-v8-search-glyph {
+  -moz-context-properties: fill, fill-opacity !important;
+  fill: light-dark(rgb(122, 122, 123), rgb(163, 163, 165)) !important;
+  fill-opacity: 1 !important;
+}
+
+/* ===== SAFARI ORDER-INDEPENDENT TRAILING BUTTONS ===== */
+/*
+ * Membership follows the URL anchor, not the extensions widget.
+ * Preserve native placement, commands, visibility and overflow handling.
+ * Ordinary trailing buttons share segment and hover-layer geometry.
+ */
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbarbutton-1:not(#fxa-toolbar-menu-button),
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbaritem-combined-buttons .toolbarbutton-1,
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-overflow-button {
+  background: var(--bg5) !important;
+  box-shadow: var(--bs3) !important;
+  box-sizing: border-box !important;
+  width: 39px !important;
+  min-width: 39px !important;
+  max-width: 39px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  margin: 8px -1.5px !important;
+  border-radius: 0 !important;
+  clip-path: inset(-20px 1.5px -20px 1.5px) !important;
+}
+
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbaritem-combined-buttons {
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+}
+
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbarbutton-1:not(#fxa-toolbar-menu-button)
+  > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack),
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbaritem-combined-buttons .toolbarbutton-1
+  > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack),
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-overflow-button
+  > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack),
+:root.safari-v8-no-scroll:not([customizing]) #TabsToolbar #new-tab-button
+  > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack),
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #PanelUI-menu-button
+  > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
+  box-sizing: border-box !important;
+  width: 29px !important;
+  min-width: 29px !important;
+  max-width: 29px !important;
+  height: 29px !important;
+  min-height: 29px !important;
+  max-height: 29px !important;
+  margin: 0 !important;
+  padding: 5.5px !important;
+  scale: none !important;
+  border-radius: 50% !important;
+  clip-path: circle(50%) !important;
+}
+
+:root.safari-v8-no-scroll:not([customizing]) #TabsToolbar #new-tab-button
+  > :is(.toolbarbutton-icon, .toolbarbutton-badge-stack) {
+  /* Keep the existing 16px plus artwork inside the shared 29px hover disc. */
+  padding: 6.5px !important;
+}
+
+/* ===== SAFARI PANEL BADGE AND LIGHT EDGE ===== */
+/*
+ * A badge is a descendant of the hover stack, not part of its background.
+ * Round the hover background without clipping the badge's painted overflow.
+ * Keep the approved 29px hover geometry and native badge positioning.
+ */
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbarbutton-1:not(#fxa-toolbar-menu-button)
+  > .toolbarbutton-badge-stack,
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbaritem-combined-buttons .toolbarbutton-1
+  > .toolbarbutton-badge-stack,
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-overflow-button
+  > .toolbarbutton-badge-stack,
+:root.safari-v8-no-scroll:not([customizing]) #TabsToolbar #new-tab-button
+  > .toolbarbutton-badge-stack,
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #PanelUI-menu-button
+  > .toolbarbutton-badge-stack {
+  clip-path: none !important;
+  overflow: visible !important;
+}
+
+
+/*
+ * The panel can be light while the window media query reports dark.
+ * Resolve colors against each painted button's own color-scheme.
+ * Active windows only; preserve the native inactive recipe.
+ */
+:root.safari-v8-no-scroll:not([customizing]):not(:-moz-window-inactive) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbarbutton-1:not(#fxa-toolbar-menu-button),
+:root.safari-v8-no-scroll:not([customizing]):not(:-moz-window-inactive) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbaritem-combined-buttons .toolbarbutton-1,
+:root.safari-v8-no-scroll:not([customizing]):not(:-moz-window-inactive) #nav-bar #nav-bar-overflow-button,
+:root.safari-v8-no-scroll:not([customizing]):not(:-moz-window-inactive) #TabsToolbar #new-tab-button,
+:root.safari-v8-no-scroll:not([customizing]):not(:-moz-window-inactive) #nav-bar #PanelUI-menu-button {
+  background-color: light-dark(
+    rgba(60, 60, 67, .015), transparent
+  ) !important;
+  box-shadow:
+    -.5px 0 0 light-dark(rgba(0, 0, 0, .22), rgba(0, 0, 0, .5)),
+    .5px 0 0 light-dark(rgba(0, 0, 0, .22), rgba(0, 0, 0, .5)),
+    0 -.5px 0 light-dark(rgba(0, 0, 0, .18), rgba(0, 0, 0, .09)),
+    0 .5px 0 light-dark(rgba(0, 0, 0, .18), rgba(0, 0, 0, .09)),
+    inset 0 1.5px 1.5px -1.5px
+      light-dark(rgba(255, 255, 255, .30), rgba(255, 255, 255, .75)),
+    inset 0 -1.5px 1.5px -1.5px
+      light-dark(rgba(255, 255, 255, .30), rgba(255, 255, 255, .75)),
+    0 6px 16px -5px light-dark(rgba(0, 0, 0, .015), transparent)
+    !important;
+}
+
+/* Native single-digit badge measured 14 x 11.98px: a flattened capsule.
+ * Restore a 14px minimum height; longer counters can still grow in width.
+ * Preserve extension-provided colors, native position and icon dimensions.
+ */
+:root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
+  #urlbar-container ~ .toolbaritem-combined-buttons
+  .webextension-browser-action > .toolbarbutton-badge-stack
+  > .toolbarbutton-badge {
+  box-sizing: border-box !important;
+  min-height: 14px !important;
+  line-height: 12px !important;
+  padding-block: 1px !important;
+}
+
+/* ===== SAFARI ACTIVE TEXT WHITE CALIBRATION ===== */
+/*
+ * Screenshot-informed dark text: Safari's solid strokes measured 235/235/235.
+ * Change text paint only, never container opacity or favicon colors.
+ * On the color property, currentColor preserves the inherited light color.
+ * Existing placeholder and selection rules remain independent.
+ */
+:root.safari-v8-no-scroll:not(:-moz-window-inactive)
+  #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:is([selected], [visuallyselected]):not([pinned])
+  .tab-label,
+:root.safari-v8-no-scroll:not(:-moz-window-inactive)
+  #urlbar.safari-v8-moving.safari-v8-visible .urlbar-input {
+  color: light-dark(currentColor, rgb(235, 235, 235)) !important;
+}
+
+/* ===== SAFARI ADDRESS FONT SIZE PARITY ===== */
+/*
+ * Runtime: domain pseudo-label is 13px; native address input is 13.75px.
+ * Match input size to the existing label without resetting line-height,
+ * font family, weight, text color, selection or placeholder styling.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible .urlbar-input {
+  font-size: 13px !important;
 }
