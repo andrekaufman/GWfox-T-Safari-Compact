@@ -1107,11 +1107,6 @@
       "safari-v8-navigation-layout-follow",
       navigationWidthMoving
     );
-    setClassState(
-      document.documentElement,
-      "safari-v8-dense-tabs",
-      geometry.dense
-    );
     setPixelProperty(
       tabs,
       "--safari-v8-row-width",
@@ -1594,7 +1589,6 @@
 
   function retireAddressPresentation() {
     retireAddress();
-    document.documentElement.classList.remove("safari-v8-opening-reserve");
     urlbar.classList.remove(
       "safari-v8-newtab-enter", "safari-v8-exact-close-hover"
     );
@@ -1603,9 +1597,6 @@
 
   function closeUrlbar() {
     if (lifecycle.disposed) return;
-    document.documentElement.classList.remove(
-      "safari-v8-opening-reserve"
-    );
     const tab = selectedTab();
     const wasVisible = visible;
     const previousAddressOwner = addressOwner;
@@ -2500,9 +2491,6 @@
     positionUrlbar();
     urlbar.classList.add("safari-v8-newtab-enter");
     void urlbar.getBoundingClientRect();
-    document.documentElement.classList.remove(
-      "safari-v8-opening-reserve"
-    );
     positionUrlbar();
     positionShelfGeometryProbe();
     /*
@@ -2769,8 +2757,7 @@
     noScrollFlexAttributes.clear();
     cancelContentHandoff();
     document.documentElement.classList.remove(
-      "safari-v8-no-scroll", "safari-v8-dense-tabs",
-      "safari-v8-navigation-layout-follow"
+      "safari-v8-no-scroll", "safari-v8-navigation-layout-follow"
     );
     tabs.style.removeProperty("--safari-v8-row-width");
     tabs.style.removeProperty("--safari-v8-edit-width");
@@ -2783,7 +2770,6 @@
       tab.style.removeProperty("--safari-v8-tab-grow");
       tab.style.removeProperty("--safari-v8-content-center");
     }
-    document.documentElement.classList.remove("safari-v8-opening-reserve");
     hideCleanGlyph();
     retireAddressPresentation();
     clearControlOwner();
@@ -2822,9 +2808,6 @@
   };
   window.__safariCompactCleanup = cleanup;
 
-  document.documentElement.classList.remove(
-    "safari-v8-opening-reserve"
-  );
   /*
    * The initial tab already exists when this script takes over its layout.
    * Apply the first no-scroll allocation with transitions suppressed, flush
