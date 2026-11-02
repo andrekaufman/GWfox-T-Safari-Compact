@@ -2277,7 +2277,7 @@
   .tabbrowser-tab:not([pinned]) {
   position: relative !important;
   inset-inline: auto !important;
-  flex: 1 1 0 !important;
+  flex: var(--safari-v8-tab-grow, 1) 1 0 !important;
   width: 0 !important;
   min-width: 0 !important;
   max-width: var(--safari-v8-row-width) !important;
@@ -2371,7 +2371,11 @@
   justify-content: center !important;
   align-items: center !important;
   gap: 5.5px !important;
-  padding-inline: 8px !important;
+  /* Reserve the fixed leading close control even before hover.
+   * Shrink the label, not the favicon or the tab's allocated share.
+   */
+  box-sizing: border-box !important;
+  padding-inline: 30px 8px !important;
   overflow: hidden !important;
 }
 
@@ -2383,7 +2387,7 @@
   flex: 0 1 auto !important;
   width: auto !important;
   min-width: 0 !important;
-  max-width: calc(100% - 32px) !important;
+  max-width: 100% !important;
   overflow: hidden !important;
 }
 
@@ -2402,7 +2406,7 @@
   .tabbrowser-tab.safari-v8-icon-only:not([pinned])
   > .tab-stack > .tab-content {
   gap: 0 !important;
-  padding-inline: 0 !important;
+  padding-inline: 8px !important;
 }
 
 :root.safari-v8-no-scroll
@@ -2423,8 +2427,8 @@
   #tabbrowser-arrowscrollbox
   .tabbrowser-tab:not([pinned]) {
   transition:
-    max-width 160ms ease-out,
-    flex-grow 160ms ease-out
+    max-width 300ms cubic-bezier(.16, 1, .3, 1),
+    flex-grow 300ms cubic-bezier(.16, 1, .3, 1)
     !important;
 }
 
@@ -2527,8 +2531,8 @@
   #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox {
   transition:
-    width 160ms ease-out,
-    flex-basis 160ms ease-out
+    width 300ms cubic-bezier(.16, 1, .3, 1),
+    flex-basis 300ms cubic-bezier(.16, 1, .3, 1)
     !important;
 }
 
@@ -2603,7 +2607,7 @@
  */
 :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned]) {
-  max-width: var(--safari-v8-edit-width) !important;
+  max-width: var(--safari-v8-tab-width, var(--safari-v8-edit-width)) !important;
   overflow: clip !important;
 }
 :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
@@ -2621,9 +2625,9 @@
   background: transparent !important;
   box-shadow: none !important;
   transition:
-    width 160ms ease-out,
-    flex-basis 160ms ease-out,
-    margin-inline-start 160ms ease-out !important;
+    width 300ms cubic-bezier(.16, 1, .3, 1),
+    flex-basis 300ms cubic-bezier(.16, 1, .3, 1),
+    margin-inline-start 300ms cubic-bezier(.16, 1, .3, 1) !important;
 }
 :root.safari-v8-no-scroll #urlbar-container:has(#urlbar)
   #urlbar.safari-v8-moving {
@@ -3312,4 +3316,323 @@
 :root.safari-v8-no-scroll
   #urlbar.safari-v8-moving.safari-v8-visible .urlbar-input {
   font-size: 13px !important;
+}
+
+/* One native flex-grow clock supplies row geometry during opening.
+ * Do not ease the sampled width/offset a second time.
+ * Native tab max-width transitions retain Firefox lifecycle bookkeeping.
+ */
+:root.safari-v8-no-scroll.safari-v8-opening-clock
+  #tabbrowser-tabs[orient="horizontal"] #tabbrowser-arrowscrollbox {
+  transition: none !important;
+}
+
+/* ===== SAFARI OPENING CONTENT OCCLUSION ===== */
+/* Hide only content covered by the capsule, not the approved glass material.
+ * A hard mask avoids blending two independently moving text runs.
+ */
+:root.safari-v8-no-scroll.safari-v8-opening-clock
+  #tabbrowser-tabs .tab-content.safari-v8-opening-occluded {
+  mask-image: linear-gradient(
+    to right,
+    black 0,
+    black var(--safari-v8-occlusion-start),
+    transparent var(--safari-v8-occlusion-start),
+    transparent var(--safari-v8-occlusion-end),
+    black var(--safari-v8-occlusion-end)
+  ) !important;
+}
+
+/* Design trial, not a measured Safari duration.
+ * During opening, existing tabs must not compress on the shorter closing
+ * curve while the new tab is still growing. Match both native properties
+ * across participating tabs; retain Firefox transition bookkeeping.
+ * Closing tabs and reduced motion keep their existing rules.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  :root.safari-v8-no-scroll.safari-v8-opening-clock
+    #tabbrowser-tabs[orient="horizontal"]
+    #tabbrowser-arrowscrollbox
+    .tabbrowser-tab:not([pinned], [closing]) {
+    transition:
+      max-width 300ms cubic-bezier(.16, 1, .3, 1),
+      flex-grow 300ms cubic-bezier(.16, 1, .3, 1)
+      !important;
+  }
+}
+
+/* ===== SAFARI DENSE SELECTED MINIMUM ===== */
+/*
+ * GWfox-T's selected-tab 225px minimum overrides the opening max-width.
+ * At dense counts it consumes nearly the entire final share immediately.
+ * Use the existing equal-share allocation instead, including after handoff.
+ * Two IDs outrank the inherited one-ID selected-tab rule.
+ */
+/* Equal-share allocation must remain authoritative after opening too.
+ * Restoring the inherited 225px selected minimum at handoff makes a
+ * six-tab share jump from about 201px to 225px.
+ */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab[selected]:not([pinned]) {
+  min-width: 0 !important;
+}
+
+/* ===== SAFARI NAVIGATION SINGLE DISPLAY HANDOFF ===== */
+/*
+ * Do not retain the forward button's layout contribution through a separate
+ * discrete display transition while the back-button width is changing.
+ * Keep the existing opacity/scale paint transitions and reduced-motion guard.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  :root.safari-v8-no-scroll:not([customizing])
+    #nav-bar #forward-button {
+    transition:
+      opacity 120ms ease-out,
+      scale 190ms cubic-bezier(.2, .8, .2, 1)
+      !important;
+    transition-behavior: normal !important;
+  }
+}
+
+/* ===== SAFARI NAVIGATION CAPSULE CONTOUR PARITY ===== */
+/* Reuse the approved trailing capsule paint, without changing geometry,
+ * arrow icons, the forward-button separator or inactive-window paint.
+ */
+:root.safari-v8-no-scroll:not([customizing]):not(:-moz-window-inactive)
+  #nav-bar #back-button:has(+ #forward-button) {
+  background-color: light-dark(
+    rgba(60, 60, 67, .015), transparent
+  ) !important;
+  box-shadow:
+    -.5px 0 0 light-dark(rgba(0, 0, 0, .22), rgba(0, 0, 0, .5)),
+    .5px 0 0 light-dark(rgba(0, 0, 0, .22), rgba(0, 0, 0, .5)),
+    0 -.5px 0 light-dark(rgba(0, 0, 0, .18), rgba(0, 0, 0, .09)),
+    0 .5px 0 light-dark(rgba(0, 0, 0, .18), rgba(0, 0, 0, .09)),
+    inset 0 1.5px 1.5px -1.5px
+      light-dark(rgba(255, 255, 255, .30), rgba(255, 255, 255, .75)),
+    inset 0 -1.5px 1.5px -1.5px
+      light-dark(rgba(255, 255, 255, .30), rgba(255, 255, 255, .75)),
+    0 6px 16px -5px light-dark(rgba(0, 0, 0, .015), transparent)
+    !important;
+}
+
+/* ===== SAFARI NAVIGATION LIVE LAYOUT FOLLOW ===== */
+/*
+ * Back-button width already supplies intermediate toolbar geometry.
+ * Follow that geometry directly instead of transitioning the sampled row
+ * allocation again. Ordinary opening/closing transitions remain unchanged.
+ */
+:root.safari-v8-no-scroll.safari-v8-navigation-layout-follow
+  #tabbrowser-tabs[orient="horizontal"] #tabbrowser-arrowscrollbox {
+  transition: none !important;
+}
+
+/* ===== SAFARI NATIVE DROP TRANSITION CONTRACT ===== */
+/*
+ * Native same-window drop waits for transform transitionend before
+ * committing order and clearing movingtab/pinned-drop-indicator.
+ * Preserve that transition alongside our existing width bookkeeping.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  :root.safari-v8-no-scroll
+    #tabbrowser-tabs[orient="horizontal"]
+    #tabbrowser-arrowscrollbox
+    .tabbrowser-tab[tabdrop-samewindow]:not([pinned], [closing]) {
+    transition:
+      var(--tab-dragover-transition),
+      max-width 300ms cubic-bezier(.16, 1, .3, 1),
+      flex-grow 300ms cubic-bezier(.16, 1, .3, 1)
+      !important;
+  }
+}
+
+/* ===== SAFARI NAVIGATION TAB WIDTH DIRECT FOLLOW ===== */
+/*
+ * The row already follows the animated navigation reservation directly.
+ * Tab max-width must follow the same sampled allocation without a second
+ * 300ms transition, which otherwise leaves the trailing tab catching up.
+ * Opening, closing and native drag landing retain their existing rules.
+ */
+:root.safari-v8-no-scroll.safari-v8-navigation-layout-follow:not(.safari-v8-opening-clock)
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab[fadein]:not(
+    [pinned], [closing], [tabdrop-samewindow], .safari-v8-retiring
+  ) {
+  transition: none !important;
+}
+
+/* ===== SAFARI EMPTY NAVIGATION RESERVATION COLLAPSE ===== */
+/*
+ * Keep the back-button layout box while its reservation collapses.
+ * Existing width sampling then drives the row and tabs on one clock.
+ * No delayed display handoff, timer, or second row interpolation.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  :root.safari-v8-no-scroll:not([customizing])
+    #nav-bar #back-button:has(+ #forward-button) {
+    transition:
+      min-width 190ms cubic-bezier(.2,.8,.2,1),
+      max-width 190ms cubic-bezier(.2,.8,.2,1),
+      width 190ms cubic-bezier(.2,.8,.2,1),
+      margin-inline-start 190ms cubic-bezier(.2,.8,.2,1),
+      margin-inline-end 190ms cubic-bezier(.2,.8,.2,1),
+      opacity 120ms ease-out,
+      background-color 150ms ease-out,
+      box-shadow 150ms ease-out !important;
+  }
+
+  :root.safari-v8-no-scroll:not([customizing])
+    #nav-bar #back-button[disabled]:has(+ #forward-button[disabled]) {
+    display: flex !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin-inline: 0 !important;
+    padding-inline: 0 !important;
+    opacity: 0 !important;
+    overflow: clip !important;
+    pointer-events: none !important;
+  }
+}
+
+/* ===== SAFARI DRAG SHELF PAINT BOUNDARY ===== */
+/* Clip native dragged paint to the stationary rounded shelf, not the panel.
+ * Root-level fixed controls need their own matching horizontal clip.
+ * Native transforms, drop transitions and tab allocation remain untouched.
+ */
+:root.safari-v8-no-scroll
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox.safari-v8-drag-shelf-clip {
+  clip-path: inset(4px 0 round 19.5px / 18px) !important;
+}
+
+:root.safari-v8-no-scroll
+  :is(#safari-v8-exact-close, #safari-v8-tab-reload).safari-v8-drag-control-clip {
+  clip-path: inset(
+    0 var(--safari-v8-drag-clip-right, 0px)
+    0 var(--safari-v8-drag-clip-left, 0px)
+  ) !important;
+}
+
+/* ===== SAFARI INSERTION INDICATOR ORIGIN ===== */
+/*
+ * Native dragover computes indicator translation relative to the scrollbox.
+ * The indicator is a sibling before that box, so its paint origin must also
+ * include the centered shelf margin. Relative positioning changes paint only,
+ * not flex allocation, native drop indices or the row's position.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  > .tab-drop-indicator {
+  inset-inline-start: var(--safari-v8-row-offset, 0px) !important;
+}
+
+/* ===== SAFARI TAB PRESS WITHOUT SHRINK ===== */
+/* Override the theme's :active scale only. Deliberately not !important:
+ * native inline drag transforms must retain priority over this paint rule.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:active {
+  transform: none;
+}
+
+/* ===== SAFARI OPENING FLEX SPACE CONTINUITY ===== */
+/*
+ * Existing tabs must share the space not yet occupied by the opening tab.
+ * Capping them at their final share leaves a temporary trailing gap.
+ * Keep the opening tab's numeric max-width transition for native bookkeeping.
+ * Closing and drag landing retain their existing allocation.
+ */
+:root.safari-v8-no-scroll.safari-v8-opening-clock
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab[fadein]:not(
+    [pinned], [closing], [tabdrop-samewindow],
+    .safari-v8-opening-tab, .safari-v8-retiring
+  ) {
+  max-width: none !important;
+}
+
+/* The inherited selected minimum otherwise jumps from near zero to 225px
+ * at fadein, independently of the native opening flex-grow progress.
+ */
+:root.safari-v8-no-scroll.safari-v8-opening-clock
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab.safari-v8-opening-tab[selected]:not([pinned], [closing]) {
+  min-width: 0 !important;
+}
+
+/* Dense presentation: reserve reload space in the selected native face,
+ * including when the address field is not focused. Never on hover alone.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab[selected]:not([pinned])
+  > .tab-stack > .tab-content {
+  padding-inline-end: 36px !important;
+}
+
+
+/* The fixed reload must not paint over editable address text either.
+ * Keep this reservation stable before hover to avoid text reflow.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-input-container {
+  padding-inline-end: 36px !important;
+}
+
+/* Custom hostname labels do not represent the native full-title overflow.
+ * A native textoverflow mask on their parent can fade a hostname that fits.
+ * Keep the existing clipping/ellipsis for genuinely constrained labels.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox .tabbrowser-tab:not([pinned])
+  .tab-label-container {
+  mask-image: none !important;
+}
+
+/* The custom reload already has a permanent 36px trailing reservation.
+ * Invisible native page actions must not reserve a second control area.
+ * Keep the separate native go button and its typing behavior unchanged.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible
+  #page-action-buttons {
+  display: none !important;
+}
+
+/* Override native and inherited URL overflow masks on the actual input.
+ * Preserve input scrolling, selection, direction and control reservations.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible
+  > .urlbar-input-container > .urlbar-input-box > #urlbar-input {
+  mask-image: none !important;
+}
+
+/* Center inactive labelled content where spare space permits.
+ * Keep flex allocation, text budget and hover geometry unchanged.
+ * Relative left remains independent of reveal-animation translate.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not(
+    [pinned], [selected], [visuallyselected],
+    .safari-v8-address, .safari-v8-icon-only
+  ) > .tab-stack > .tab-content
+  > :is(.tab-icon-stack, .tab-label-container) {
+  position: relative !important;
+  left: var(--safari-v8-content-center, 0px) !important;
+}
+
+/* Selected new-tab text matches the existing search placeholder.
+ * Preserve inactive-label opacity, domain colors and selection styling.
+ */
+:root.safari-v8-no-scroll:not(:-moz-window-inactive)
+  #tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab:is([selected], [visuallyselected]):not([pinned])
+  .tab-label[data-safari-display-label="Ny flik"]::after {
+  color: light-dark(rgb(72, 72, 74), rgb(218, 218, 220)) !important;
 }
