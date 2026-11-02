@@ -59,14 +59,6 @@
   shelfProbe.setAttribute("aria-hidden", "true");
 
   /*
-   * External compositing surface. This is the only tested paint position
-   * that makes the editable address pill visually match the active tab.
-   */
-  const addressSurface = document.createElement("div");
-  addressSurface.id = "safari-v8-address-surface";
-  addressSurface.setAttribute("aria-hidden", "true");
-
-  /*
    * The external Soft Light surface corrects the address material, but it
    * also changes favicon colours. Render an untouched copy of the resolved
    * glyph above the compositing surface.
@@ -84,7 +76,6 @@
    * Fixed positioning retains the existing viewport geometry.
    */
   shelfPaintHost.prepend(shelfProbe);
-  document.documentElement.appendChild(addressSurface);
   document.documentElement.appendChild(cleanGlyph);
 
   let visible = false;
@@ -255,7 +246,6 @@
       shelfProbe,
       closeButton,
       reloadButton,
-      addressSurface,
       cleanGlyph
     ].filter(element => {
       if (!element || !element.isConnected) return false;
@@ -325,7 +315,6 @@
   function positionFinalNavigationGeometry() {
     positionUrlbar();
     applyPush();
-    positionAddressSurface();
     positionShelfGeometryProbe();
 
     if (visible) {
@@ -2064,7 +2053,6 @@
       if (token !== shelfProbeAnimationToken) return;
       if (noScrollLayoutEnabled()) {
         positionUrlbar();
-        positionAddressSurface();
       }
       positionShelfGeometryProbe();
 
@@ -2077,40 +2065,6 @@
     };
 
     shelfProbeAnimationFrame = guardedFrame(tick);
-  }
-
-  function positionAddressSurface() {
-    if (disposed) return;
-    if (!visible) {
-      addressSurface.classList.remove("visible");
-      return;
-    }
-
-    const rect = urlbar.getBoundingClientRect();
-
-    if (rect.width <= 0 || rect.height <= 0) {
-      addressSurface.classList.remove("visible");
-      return;
-    }
-
-    addressSurface.style.setProperty(
-      "--surface-left",
-      `${rect.left + 4}px`
-    );
-    addressSurface.style.setProperty(
-      "--surface-top",
-      `${rect.top + 3}px`
-    );
-    addressSurface.style.setProperty(
-      "--surface-width",
-      `${Math.max(1, rect.width - 8)}px`
-    );
-    addressSurface.style.setProperty(
-      "--surface-height",
-      `${Math.max(1, rect.height - 6)}px`
-    );
-
-    addressSurface.classList.add("visible");
   }
 
   function render() {
@@ -2137,7 +2091,6 @@
        * has completed.
        */
       if (!navigationShiftInProgress) {
-        positionAddressSurface();
         positionShelfGeometryProbe();
         followShelfGeometryAnimation();
         updateCleanGlyph();
@@ -2223,7 +2176,6 @@
     applyPush();
     scrollSelectedTabIntoView();
     positionUrlbar();
-    positionAddressSurface();
     updateGlyph();
 
     if (noScrollLayoutEnabled() && contentOrigin?.width > 0) {
@@ -2265,7 +2217,6 @@
       "safari-v8-visible", "safari-v8-newtab-enter",
       "safari-v8-exact-close-hover"
     );
-    addressSurface.classList.remove("visible");
     cleanGlyph.classList.remove("visible");
     glyphSlot.classList.remove("safari-v8-close-mask");
   }
@@ -2284,7 +2235,6 @@
     hideCleanGlyph();
     setVisible(false);
     clearPush();
-    positionAddressSurface();
     positionShelfGeometryProbe();
     followShelfGeometryAnimation();
 
@@ -2831,7 +2781,6 @@
      * expansion during a user-controlled scroll.
      */
     positionUrlbar();
-    positionAddressSurface();
     positionShelfGeometryProbe();
   }
 
@@ -3125,7 +3074,6 @@
       if (!newTabOpening && addressOwner !== selectedTab()) {
         hideCleanGlyph();
         setVisible(false);
-        positionAddressSurface();
       }
       updateNoScrollLayout();
       positionUrlbar();
@@ -3226,7 +3174,6 @@
     );
     scrollSelectedTabIntoView();
     positionUrlbar();
-    positionAddressSurface();
     positionShelfGeometryProbe();
     // Commit shared geometry before ordinary transitions resume.
     if (document.documentElement.classList.contains("safari-v8-shared-opening")) {
@@ -3279,7 +3226,6 @@
         }
 
         positionUrlbar();
-        positionAddressSurface();
         positionShelfGeometryProbe();
         if (fadedIn && (!animation || reduced ||
             animation.playState === "finished")) {
@@ -3363,7 +3309,6 @@
       }
 
       positionUrlbar();
-      positionAddressSurface();
       positionShelfGeometryProbe();
       applyGlyph(searchGlyph);
 
@@ -3536,7 +3481,6 @@
     urlbar.style.setProperty("--safari-v8-left-shift", "0px");
 
     positionUrlbar();
-    positionAddressSurface();
     positionShelfGeometryProbe();
     applyGlyph(searchGlyph);
 
@@ -3699,14 +3643,12 @@
     if (event.target === addressOwner) {
       hideCleanGlyph();
       setVisible(false);
-      positionAddressSurface();
     }
     // TabClose precedes the native closing flag on some Firefox versions.
     // Defer allocation to the event's completed native state, not a timer.
     guardedMicrotask(() => {
       updateNoScrollLayout();
       positionUrlbar();
-      positionAddressSurface();
       positionShelfGeometryProbe();
       // Follow the complete 300ms close transition, including its tail.
       followShelfGeometryAnimation(340);
@@ -3857,7 +3799,6 @@
     glyphObserver?.disconnect();
     hideCleanGlyph();
     cleanGlyph.remove();
-    addressSurface.remove();
     tabs.removeEventListener(
       "pointerdown",
       onTabPointerDown,

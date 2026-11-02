@@ -1561,53 +1561,6 @@
 
 
 /*
- * External compositing surface at the proven paint position.
- *
- * Overlay makes the editable address foreground visually match the
- * ordinary active tab. The clean-glyph layer restores favicon colours
- * above this surface.
- */
-#safari-v8-address-surface {
-  position: fixed !important;
-
-  left: var(--surface-left) !important;
-  top: var(--surface-top) !important;
-  width: var(--surface-width) !important;
-  height: var(--surface-height) !important;
-
-  display: block !important;
-  box-sizing: border-box !important;
-
-  border: 0 !important;
-  border-radius: 999px !important;
-
-  background: rgb(255, 255, 255) !important;
-  background-color: rgb(255, 255, 255) !important;
-  background-image: none !important;
-
-  mix-blend-mode: overlay !important;
-
-  clip-path: inset(0 round 999px) !important;
-  overflow: hidden !important;
-  contain: paint !important;
-
-  opacity: 0 !important;
-  visibility: hidden !important;
-
-  pointer-events: none !important;
-  z-index: 2147483647 !important;
-}
-
-#safari-v8-address-surface.visible {
-  /*
-   * Calibrated to visually match the ordinary active tab while the
-   * clean-glyph copy preserves the original favicon rendering.
-   */
-  opacity: .90 !important;
-  visibility: visible !important;
-}
-
-/*
  * Stable selection fallback. Black selected text matches Safari.
  * Markeringsfärgen finjusteras separat efter att den stabila pillen
  * har återställts.
@@ -1708,8 +1661,6 @@
 :root.safari-v8-navigation-shift
   #safari-v8-exact-close,
 :root.safari-v8-navigation-shift
-  #safari-v8-address-surface,
-:root.safari-v8-navigation-shift
   #safari-v8-clean-glyph {
   transition: none !important;
 }
@@ -1772,23 +1723,10 @@
 }
 
 #urlbar.safari-v8-moving.safari-v8-visible
-  > .urlbar-input-container,
-#safari-v8-address-surface {
+  > .urlbar-input-container {
   background: var(--safari-v8-address-foreground) !important;
   background-color: var(--safari-v8-address-foreground) !important;
   box-shadow: inset 0 0 0 .5px var(--safari-v8-address-edge) !important;
-}
-
-/*
- * The input container owns the opaque material. The root-level blend surface
- * stays disabled so it cannot conceal editable text.
- */
-#safari-v8-address-surface,
-#safari-v8-address-surface.visible {
-  mix-blend-mode: normal !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  z-index: 2147482000 !important;
 }
 
 #safari-v8-clean-glyph {
