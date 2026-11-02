@@ -212,9 +212,15 @@
     return tab.label || "";
   }
 
+  function boundedDisplayMetadata(value, limit = 512) {
+    const text = typeof value === "string" ? value : "";
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit - 1)}…`;
+  }
+
   function compactSafariDisplayLabel(tab, fullLabel) {
     tab.classList.remove("safari-v8-compact-tab");
-    return fullLabel;
+    return boundedDisplayMetadata(fullLabel);
   }
 
   function updateSafariDisplayLabel(tab) {
@@ -243,10 +249,111 @@
     updateSafariDisplayLabel(event.target);
   }
 
+  const addressState = {
+    phase: "idle",
+    owner: null,
+    openingIdentity: null
+  };
+
+  function validTabOwner(tab, { selected = false } = {}) {
+    return Boolean(
+      tab &&
+      tab.isConnected &&
+      !tab.hidden &&
+      !tab.closing &&
+      gBrowser.tabs.includes(tab) &&
+      (!selected || tab === selectedTab())
+    );
+  }
+
   function clearAddressState() {
     tabs.querySelectorAll(".safari-v8-address").forEach(tab => {
       tab.classList.remove("safari-v8-address");
     });
+  }
+
+  function commitAddressState(phase, owner = null, openingIdentity = null) {
+    if (lifecycle.disposed) return false;
+    const active = phase !== "idle" && validTabOwner(owner);
+
+    addressState.phase = active ? phase : "idle";
+    addressState.owner = active ? owner : null;
+    addressState.openingIdentity = active ? openingIdentity : null;
+    visible = active;
+    addressOwner = addressState.owner;
+
+    document.documentElement.classList.toggle(
+      "safari-v8-address-active", active
+    );
+    urlbar.classList.toggle("safari-v8-visible", active);
+    clearAddressState();
+
+    if (active) {
+      owner.classList.add("safari-v8-address");
+    } else {
+      urlbar.classList.remove("safari-v8-newtab-enter");
+    }
+
+    if (noScrollLayoutEnabled()) updateNoScrollLayout();
+    return active;
+  }
+
+  function beginAddress(tab, reason = "editing", openingIdentity = null) {
+    return commitAddressState(
+      reason === "opening" ? "opening" : "editing",
+      tab,
+      openingIdentity
+    );
+  }
+
+  function focusAddress(tab) {
+    if (!validTabOwner(tab, { selected: true })) return false;
+    if (addressState.owner !== tab || addressState.phase === "idle") {
+      if (!beginAddress(tab, "editing")) return false;
+    } else {
+      addressState.phase = "editing";
+      addressState.openingIdentity = null;
+    }
+    return true;
+  }
+
+  function retireAddress() {
+    if (addressState.phase !== "idle") addressState.phase = "retiring";
+    commitAddressState("idle");
+  }
+
+  function reconcileAddressWithSelection() {
+    if (addressState.phase === "idle") return false;
+    if (!validTabOwner(addressState.owner, { selected: true })) {
+      retireAddress();
+      return false;
+    }
+    return true;
+  }
+
+  const controlState = {
+    owner: null,
+    surface: "none",
+    closeVisible: false,
+    reloadVisible: false
+  };
+
+  function setControlOwner(tab, surface) {
+    if (!validTabOwner(tab)) {
+      controlState.owner = null;
+      controlState.surface = "none";
+      return false;
+    }
+    controlState.owner = tab;
+    controlState.surface = surface;
+    return true;
+  }
+
+  function clearControlOwner() {
+    controlState.owner = null;
+    controlState.surface = "none";
+    controlState.closeVisible = false;
+    controlState.reloadVisible = false;
   }
 
   let tabCloseTarget = null;
@@ -260,6 +367,7 @@
 
   function hideClose() {
     closeHover = false;
+    controlState.closeVisible = false;
     closeButton.classList.remove("visible");
     urlbar.classList.remove("safari-v8-exact-close-hover");
     glyphSlot.classList.remove("safari-v8-close-mask");
@@ -276,26 +384,23 @@
 
   function hideReload() {
     reloadHover = false;
+    controlState.reloadVisible = false;
     reloadButton.classList.remove("visible");
   }
 
-  function setVisible(state) {
-    if (lifecycle.disposed) return;
-    visible = state;
-    document.documentElement.classList.toggle("safari-v8-address-active", state);
-    urlbar.classList.toggle("safari-v8-visible", state);
-    clearAddressState();
-    const tab = selectedTab();
-
-    if (state && tab) {
-      addressOwner = tab;
-      tab.classList.add("safari-v8-address");
-    } else if (!state) {
-      urlbar.classList.remove("safari-v8-newtab-enter");
-      addressOwner = null;
-          hideClose();
+  function setVisible(
+    state,
+    owner = selectedTab(),
+    reason = "editing",
+    openingIdentity = null
+  ) {
+    if (lifecycle.disposed) return false;
+    if (state) {
+      return beginAddress(owner, reason, openingIdentity);
     }
-    if (noScrollLayoutEnabled()) updateNoScrollLayout();
+    retireAddress();
+    hideClose();
+    return true;
   }
 
   let contentHandoffAnimations = [];
@@ -1038,6 +1143,27 @@
     return spec === "about:newtab" || spec === "about:home" || spec === "about:blank";
   }
 
+  const allowedGlyphSchemes = new Set([
+    "page-icon", "chrome", "resource", "moz-extension",
+    "data", "blob", "http", "https"
+  ]);
+
+  function validatedGlyphSource(candidate) {
+    if (typeof candidate !== "string" ||
+        candidate.length === 0 ||
+        candidate.length > 16384 ||
+        /[\u0000-\u001f\u007f]/.test(candidate)) {
+      return "";
+    }
+
+    try {
+      const uri = Services.io.newURI(candidate);
+      return allowedGlyphSchemes.has(uri.scheme) ? uri.spec : "";
+    } catch {
+      return "";
+    }
+  }
+
   function selectedSuggestionGlyph() {
     if (isBlankNewTab() && input.value.length === 0) return "";
 
@@ -1045,37 +1171,46 @@
       document.querySelector(".urlbarView-row[selected]") ||
       document.querySelector(".urlbarView-row[aria-selected='true']");
 
-    return row?.querySelector(".urlbarView-favicon")
-      ?.getAttribute("src") || "";
+    return validatedGlyphSource(
+      row?.querySelector(".urlbarView-favicon")?.getAttribute("src") || ""
+    );
   }
 
   function selectedTabGlyph() {
     const tab = selectedTab();
-    if (!tab) return "";
+    if (!validTabOwner(tab, { selected: true })) return "";
 
-    return (
+    const candidate =
       (typeof gBrowser.getIcon === "function"
         ? gBrowser.getIcon(tab)
         : "") ||
       tab.image ||
       tab.getAttribute("image") ||
       tab.querySelector(".tab-icon-image")?.getAttribute("src") ||
-      ""
-    );
+      "";
+
+    return validatedGlyphSource(candidate);
+  }
+
+  function serializeGlyphURL(source) {
+    return `url("${source
+      .replaceAll("\\", "\\\\")
+      .replaceAll('"', '\\"')}")`;
   }
 
   function applyGlyph(source) {
-    // Suppress the actual image while close owns the address glyph slot.
-    // The normal image is inline !important, so wrapper visibility alone
-    // is not a sufficient image-source mask.
     const masked = glyphSlot.classList.contains("safari-v8-close-mask");
-    const resolvedSource = source || searchGlyph;
-    // Only the built-in search glyph accepts theme-aware context paint.
-    // Favicons retain their original colors and the existing close mask.
-    glyph.classList.toggle("safari-v8-search-glyph", resolvedSource === searchGlyph);
+    const resolvedSource = source === searchGlyph
+      ? searchGlyph
+      : validatedGlyphSource(source) || searchGlyph;
+
+    glyph.classList.toggle(
+      "safari-v8-search-glyph",
+      resolvedSource === searchGlyph
+    );
     glyph.style.setProperty(
       "list-style-image",
-      masked ? "none" : `url("${resolvedSource}")`,
+      masked ? "none" : serializeGlyphURL(resolvedSource),
       "important"
     );
   }
@@ -1258,20 +1393,21 @@
   function openUrlbar() {
     if (lifecycle.disposed) return;
     const tab = selectedTab();
-    if (!tab) return;
+    if (!validTabOwner(tab, { selected: true })) return;
 
     /*
      * Cmd+L on an address surface already owned by this tab is focus-only.
      * Re-measuring or reapplying expansion here made every invocation able to
      * change the source width and the new-tab button position.
      */
-    if (visible && addressOwner === tab) {
+    if (addressState.phase !== "idle" && addressState.owner === tab) {
       // An already focused, fully selected address needs no second transaction.
       if (document.activeElement === input &&
           input.selectionStart === 0 &&
           input.selectionEnd === input.value.length) {
         return;
       }
+      if (!focusAddress(tab)) return;
       gURLBar.focus();
       gURLBar.select();
       revealSelectedAddressFromStart();
@@ -1288,7 +1424,7 @@
       ? tab.querySelector(".tab-icon-stack")?.getBoundingClientRect()
       : null;
     if (noScrollLayoutEnabled()) cancelContentHandoff();
-    setVisible(true);
+    if (!beginAddress(tab, "editing")) return;
     positionUrlbar();
     updateNoScrollLayout();
     positionUrlbar();
@@ -1310,25 +1446,22 @@
 
     scheduler.scheduleFrame("address-focus", () => {
       if (noScrollLayoutEnabled() && (
-        !visible || addressOwner !== tab ||
+        !visible || addressState.owner !== tab ||
         selectedTab() !== tab || tab.closing || tab.hidden
       )) return;
+      if (!focusAddress(tab)) return;
       gURLBar.focus();
       gURLBar.select();
       revealSelectedAddressFromStart();
       updateGlyph();
-      });
+    });
   }
 
   function retireAddressPresentation() {
-    visible = false;
-    addressOwner = null;
-    document.documentElement.classList.remove(
-      "safari-v8-address-active", "safari-v8-opening-reserve"
-    );
+    retireAddress();
+    document.documentElement.classList.remove("safari-v8-opening-reserve");
     urlbar.classList.remove(
-      "safari-v8-visible", "safari-v8-newtab-enter",
-      "safari-v8-exact-close-hover"
+      "safari-v8-newtab-enter", "safari-v8-exact-close-hover"
     );
     glyphSlot.classList.remove("safari-v8-close-mask");
   }
@@ -1383,12 +1516,14 @@
    * native drag and close animations remain Firefox-owned.
    */
   function controlTargetRect() {
-    if (draggedControlTab) return tabPaintRect(draggedControlTab);
-    if (tabCloseTarget && tabCloseTarget !== selectedTab()) {
-      return tabPaintRect(tabCloseTarget);
+    const tab = controlState.owner;
+    if (!validTabOwner(tab)) return null;
+    if (controlState.surface === "address") {
+      return visible && addressState.owner === tab
+        ? urlbar.getBoundingClientRect()
+        : null;
     }
-    if (visible) return urlbar.getBoundingClientRect();
-    return tabPaintRect(tabCloseTarget);
+    return tabPaintRect(tab);
   }
 
   function updateControlColor(tab = controlTargetTab()) {
@@ -1468,12 +1603,22 @@
   }
 
   function showClose(tab = null) {
-    // Ownership must follow the requested tab even while another address is open.
+    const owner = tab || (visible ? addressState.owner : null);
+    const surface = tab
+      ? (draggedControlTab ? "drag" : "tab")
+      : "address";
+
+    if (!setControlOwner(owner, surface)) {
+      hideClose();
+      return;
+    }
+
     if (tabCloseTarget !== tab) {
       tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
     }
     tabCloseTarget = tab;
     closeHover = true;
+    controlState.closeVisible = true;
     positionCloseButton();
     const addressTarget = visible &&
       (!noScrollLayoutEnabled() || controlTargetTab() === addressOwner);
@@ -1502,6 +1647,7 @@
 
   function stopDraggedControls() {
     scheduler.cancelFrame("drag-follow");
+    if (controlState.surface === "drag") clearControlOwner();
     draggedControlTab = null;
     draggedControlEnding = false;
     document.querySelector("#tabbrowser-arrowscrollbox")
@@ -1593,6 +1739,7 @@
     stopDraggedControls();
     draggedControlTab = tab;
     tabCloseTarget = tab;
+    setControlOwner(tab, "drag");
     const row = document.querySelector("#tabbrowser-arrowscrollbox");
     row?.classList.add("safari-v8-drag-shelf-clip");
     const follow = () => {
@@ -1711,7 +1858,7 @@
   }
 
   function controlTargetTab() {
-    return draggedControlTab || tabCloseTarget || selectedTab();
+    return validTabOwner(controlState.owner) ? controlState.owner : null;
   }
 
   /*
@@ -1719,12 +1866,7 @@
    * rect sample follows native transforms and never publishes shelf geometry.
    */
   function reloadTargetRect() {
-    if (draggedControlTab) return tabPaintRect(draggedControlTab);
-    if (tabCloseTarget && tabCloseTarget !== selectedTab()) {
-      return tabPaintRect(tabCloseTarget);
-    }
-    if (visible) return urlbar.getBoundingClientRect();
-    return tabPaintRect(tabCloseTarget);
+    return controlTargetRect();
   }
 
   function canReloadSelectedTab() {
@@ -1769,26 +1911,28 @@
   }
 
   function showReload() {
-    /*
-     * Reload belongs exclusively to the selected tab. Inactive-tab hover
-     * keeps its full trailing label area and can never leave an invisible
-     * reload hit target behind.
-     */
-    if (
-      controlTargetTab() !== selectedTab() ||
-      !canReloadSelectedTab()
-    ) {
+    const owner = visible && addressState.owner === selectedTab() &&
+      !tabCloseTarget ? addressState.owner : tabCloseTarget;
+    const surface = !tabCloseTarget && visible
+      ? "address"
+      : (draggedControlTab ? "drag" : "tab");
+
+    if (!setControlOwner(owner, surface) ||
+        controlTargetTab() !== selectedTab() ||
+        !canReloadSelectedTab()) {
       hideReload();
       return;
     }
 
     reloadHover = true;
+    controlState.reloadVisible = true;
     positionReloadButton();
     if (reloadHover) reloadButton.classList.add("visible");
   }
 
   function onPointerMove(event) {
-    if (lifecycle.disposed) return;
+    if (lifecycle.disposed || !event.isTrusted ||
+        event.type !== "pointermove") return;
     // Drag ownership must not follow tabs crossed by the pointer.
     if (draggedControlTab) return;
     const onClose =
@@ -1865,6 +2009,7 @@
       hideReload();
       tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
       tabCloseTarget = null;
+      clearControlOwner();
       return;
     }
 
@@ -1887,35 +2032,61 @@
     hideReload();
     tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
     tabCloseTarget = null;
+    clearControlOwner();
   }
 
-  function blockClosePress(event) {
+  function trustedControlEvent(event, control, expectedType) {
+    return Boolean(
+      event.isTrusted &&
+      event.type === expectedType &&
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey &&
+      (event.target === control || control.contains(event.target))
+    );
+  }
+
+  function blockControlPress(event, control, expectedType) {
+    if (!trustedControlEvent(event, control, expectedType)) return false;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
+    return true;
+  }
+
+  function blockClosePress(event) {
+    blockControlPress(event, closeButton, event.type);
   }
 
   function closeSelectedTab(event) {
-    blockClosePress(event);
+    if (!blockControlPress(event, closeButton, "click")) return;
     const tab = controlTargetTab();
-    if (!tab) return;
+    if (!validTabOwner(tab) ||
+        !controlState.closeVisible ||
+        !closeButton.classList.contains("visible")) return;
+
     hideClose();
     tabCloseTarget = null;
+    clearControlOwner();
     gBrowser.removeTab(tab, { animate: true, byMouse: true });
   }
 
   function blockReloadPress(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    blockControlPress(event, reloadButton, event.type);
   }
 
   function reloadSelectedTab(event) {
-    blockReloadPress(event);
+    if (!blockControlPress(event, reloadButton, "click")) return;
     const tab = controlTargetTab();
-    if (!tab || !canReloadSelectedTab()) return;
+    if (!validTabOwner(tab, { selected: true }) ||
+        !controlState.reloadVisible ||
+        !reloadButton.classList.contains("visible") ||
+        !canReloadSelectedTab()) return;
 
     hideReload();
+    clearControlOwner();
     if (typeof gBrowser.reloadTab === "function") {
       gBrowser.reloadTab(tab);
     } else {
@@ -1927,24 +2098,16 @@
     selectedTabClickCandidate = null;
 
     if (
+      !event.isTrusted ||
+      event.type !== "pointerdown" ||
       event.button !== 0 ||
+      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
       event.target.closest?.(".tab-close-button")
     ) {
       return;
     }
 
-    /*
-     * Capture before Firefox changes selected tab, navigation history or
-     * toolbar geometry. This also catches the new-tab button because its
-     * pointer event passes through the tab strip.
-     */
-
     const tab = event.target.closest?.(".tabbrowser-tab");
-
-    /*
-     * Record whether this tab was already selected before Firefox processes
-     * the click. Do not change focus, visibility or geometry here.
-     */
     if (tab && tab === gBrowser.selectedTab) {
       selectedTabClickCandidate = tab;
     }
@@ -1960,19 +2123,16 @@
     selectedTabClickCandidate = null;
 
     if (
+      !event.isTrusted ||
+      event.type !== "click" ||
       event.button !== 0 ||
+      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
       event.target.closest?.(".tab-close-button")
     ) {
       return;
     }
 
-    /*
-     * First click selects an inactive tab. Only a separate second click on
-     * an already selected tab opens and highlights the address field.
-     */
-    if (wasAlreadySelected && !visible) {
-      openUrlbar();
-    }
+    if (wasAlreadySelected && !visible) openUrlbar();
   }
 
   function onTabSelect() {
@@ -1984,7 +2144,14 @@
         if (opening.tab === selectedTab()) {
           // TabOpen can paint before Firefox commits selection. Transfer ownership
           // at selection rather than at animation completion.
-          if (visible && addressOwner !== opening.tab) setVisible(true);
+          if (visible && addressOwner !== opening.tab) {
+            setVisible(
+              true,
+              opening.tab,
+              "opening",
+              newTabGeometryToken
+            );
+          }
         } else {
           // A real selection away retires the transaction synchronously.
           // Its queued focus and geometry callbacks must not reclaim paint.
@@ -1997,9 +2164,8 @@
         }
       }
       // Retire the old overlay before another tab can paint beneath it.
-      if (!newTabOpening && addressOwner !== selectedTab()) {
+      if (!newTabOpening && !reconcileAddressWithSelection()) {
         hideCleanGlyph();
-        setVisible(false);
       }
       updateNoScrollLayout();
       positionUrlbar();
@@ -2029,7 +2195,7 @@
   }
 
   function onFocusIn(event) {
-    if (lifecycle.disposed) return;
+    if (lifecycle.disposed || !event.isTrusted) return;
     if (
       newTabOpening ||
       (event.target !== input && !urlbar.contains(event.target))
@@ -2039,7 +2205,7 @@
 
     if (noScrollLayoutEnabled() && visible &&
         addressOwner !== selectedTab()) return;
-    setVisible(true);
+    if (!focusAddress(selectedTab())) return;
     render();
   }
 
@@ -2056,6 +2222,7 @@
   }
 
   function onKeyDown(event) {
+    if (!event.isTrusted || event.type !== "keydown") return;
     if (
       event.metaKey &&
       event.shiftKey &&
@@ -2101,7 +2268,9 @@
     // still be the previous tab. Commit ownership to the validated new tab
     // before finishing geometry, so Cmd+L cannot reopen the same surface.
     if (visible && addressOwner !== openedTab) {
-      setVisible(true);
+      setVisible(true, openedTab, "editing");
+    } else if (visible) {
+      focusAddress(openedTab);
     }
     updatePlusPlacement(true);
     positionUrlbar();
@@ -2186,8 +2355,8 @@
         "moz-src:///browser/components/tabbrowser/NewTabPagePreloading.sys.mjs"
       );
       NewTabPagePreloading.maybeCreatePreloadedBrowser(window);
-    } catch (error) {
-      console.error("Safari Compact: native new-tab preload failed", error);
+    } catch {
+      console.error("Safari Compact: native new-tab preload failed");
     }
   }
 
@@ -2278,7 +2447,7 @@
     // Waiting until finishStableNewTab replayed an already-pushed position.
     updatePlusPlacement();
     updateSafariDisplayLabel(openedTab);
-    setVisible(true);
+    setVisible(true, openedTab, "opening", token);
 
     const openingGeometry = updateNoScrollLayout();
     positionUrlbar(openingGeometry);
@@ -2371,7 +2540,10 @@
   ownEvent(reloadButton, "mousedown", blockReloadPress, true);
   ownEvent(reloadButton, "click", reloadSelectedTab, true);
 
-  const glyphObserver = ownObserver(new MutationObserver(updateGlyph));
+  const glyphObserver = ownObserver(new MutationObserver(() => {
+    if (!visible) return;
+    scheduler.scheduleFrame("glyph", updateGlyph);
+  }));
 
   const urlbarView = document.querySelector(".urlbarView");
   if (urlbarView) {
@@ -2435,6 +2607,7 @@
     document.documentElement.classList.remove("safari-v8-opening-reserve");
     hideCleanGlyph();
     retireAddressPresentation();
+    clearControlOwner();
     clearAddressState();
     tabs.querySelectorAll(".safari-v8-compact-tab").forEach(tab => {
       tab.classList.remove("safari-v8-compact-tab");
@@ -2460,8 +2633,8 @@
     while (lifecycle.disposers.length) {
       try {
         lifecycle.disposers.pop()();
-      } catch (error) {
-        console.error("Safari Compact: resource cleanup failed", error);
+      } catch {
+        console.error("Safari Compact: resource cleanup failed");
       }
     }
     if (window.__safariCompactCleanup === cleanup) {
