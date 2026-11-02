@@ -28,33 +28,145 @@
    */
   if (!shelfPaintHost || !inputContainer || !glyphSlot || !glyph) return;
 
-  let disposed = false;
+  const lifecycle = {
+    disposed: false,
+    generation: 0,
+    disposers: []
+  };
 
-  const guardedFrame = callback => requestAnimationFrame(timestamp => {
-    if (!disposed) callback(timestamp);
-  });
-  const guardedTimeout = (callback, delay) => setTimeout(() => {
-    if (!disposed) callback();
-  }, delay);
-  const guardedMicrotask = callback => queueMicrotask(() => {
-    if (!disposed) callback();
-  });
+  function own(disposer) {
+    lifecycle.disposers.push(disposer);
+    return disposer;
+  }
 
-  const closeButton = document.createElement("button");
+  function ownEvent(target, type, listener, options) {
+    target.addEventListener(type, listener, options);
+    own(() => target.removeEventListener(type, listener, options));
+  }
+
+  function ownObserver(observer) {
+    own(() => observer.disconnect());
+    return observer;
+  }
+
+  function ownNode(node) {
+    own(() => node.remove());
+    return node;
+  }
+
+  function patchMethod(owner, name, replacement) {
+    const original = owner?.[name];
+    if (typeof original !== "function") return original;
+
+    owner[name] = replacement;
+    own(() => {
+      if (owner[name] === replacement) owner[name] = original;
+    });
+    return original;
+  }
+
+  const scheduler = (() => {
+    const frames = new Map();
+    const timers = new Map();
+    const oneShotTimers = new Set();
+
+    function cancelFrame(name) {
+      const handle = frames.get(name);
+      if (handle == null) return;
+      cancelAnimationFrame(handle);
+      frames.delete(name);
+    }
+
+    function scheduleFrame(name, callback) {
+      cancelFrame(name);
+      const generation = lifecycle.generation;
+      const handle = requestAnimationFrame(timestamp => {
+        if (frames.get(name) === handle) frames.delete(name);
+        if (!lifecycle.disposed && generation === lifecycle.generation) {
+          callback(timestamp);
+        }
+      });
+      frames.set(name, handle);
+      return handle;
+    }
+
+    function cancelTimer(name) {
+      const handle = timers.get(name);
+      if (handle == null) return;
+      clearTimeout(handle);
+      timers.delete(name);
+    }
+
+    function scheduleTimer(name, callback, delay) {
+      cancelTimer(name);
+      const generation = lifecycle.generation;
+      const handle = setTimeout(() => {
+        if (timers.get(name) === handle) timers.delete(name);
+        if (!lifecycle.disposed && generation === lifecycle.generation) {
+          callback();
+        }
+      }, delay);
+      timers.set(name, handle);
+      return handle;
+    }
+
+    function scheduleOneShotTimer(callback, delay) {
+      const generation = lifecycle.generation;
+      const handle = setTimeout(() => {
+        oneShotTimers.delete(handle);
+        if (!lifecycle.disposed && generation === lifecycle.generation) {
+          callback();
+        }
+      }, delay);
+      oneShotTimers.add(handle);
+      return handle;
+    }
+
+    function scheduleMicrotask(callback) {
+      const generation = lifecycle.generation;
+      queueMicrotask(() => {
+        if (!lifecycle.disposed && generation === lifecycle.generation) {
+          callback();
+        }
+      });
+    }
+
+    function invalidate() {
+      lifecycle.generation += 1;
+      for (const handle of frames.values()) cancelAnimationFrame(handle);
+      for (const handle of timers.values()) clearTimeout(handle);
+      for (const handle of oneShotTimers) clearTimeout(handle);
+      frames.clear();
+      timers.clear();
+      oneShotTimers.clear();
+    }
+
+    return {
+      cancelFrame,
+      scheduleFrame,
+      cancelTimer,
+      scheduleTimer,
+      scheduleOneShotTimer,
+      scheduleMicrotask,
+      invalidate
+    };
+  })();
+
+  const closeButton = ownNode(document.createElement("button"));
   closeButton.id = "safari-v8-exact-close";
   closeButton.type = "button";
   closeButton.tabIndex = -1;
   closeButton.title = "Stäng flik";
   closeButton.setAttribute("aria-label", "Stäng flik");
 
-  const reloadButton = document.createElement("button");
+  const reloadButton = ownNode(document.createElement("button"));
   reloadButton.id = "safari-v8-tab-reload";
   reloadButton.type = "button";
   reloadButton.tabIndex = -1;
   reloadButton.title = "Ladda om sida";
   reloadButton.setAttribute("aria-label", "Ladda om sida");
 
-  const shelfProbe = document.createElement("div");
+  const shelfProbe = ownNode(document.createElement("div"));
   shelfProbe.id = "safari-v8-shelf-geometry-probe";
   shelfProbe.setAttribute("aria-hidden", "true");
 
@@ -71,20 +183,11 @@
   let visible = false;
   let closeHover = false;
   let reloadHover = false;
-  let glyphFrame = 0;
-  let glyphObserver = null;
-  let newTabFocusTimer = 0;
   let newTabOpening = false;
   let restoreTabCommandPending = false;
-  let restoreTabCommandTimer = 0;
-  let newTabGeometryFrame = 0;
   let newTabGeometryToken = 0;
   let sharedOpeningGeometry = null;
   let addressOwner = null;
-  let frame = 0;
-  let settleTimer = 0;
-  let resizeObserver = null;
-  let shelfProbeAnimationFrame = 0;
   let shelfProbeAnimationToken = 0;
   const safetyGap = 10;
 
@@ -136,7 +239,7 @@
   }
 
   function onSafariTabAttrModified(event) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     updateSafariDisplayLabel(event.target);
   }
 
@@ -147,7 +250,6 @@
   }
 
   let tabCloseTarget = null;
-  let controlHideTimer = 0;
   let selectedTabClickCandidate = null;
 
   /*
@@ -168,7 +270,7 @@
      * the close-hover state and its mask have been removed.
      */
     if (visible) {
-      guardedMicrotask(updateGlyph);
+      scheduler.scheduleMicrotask(updateGlyph);
     }
   }
 
@@ -178,7 +280,7 @@
   }
 
   function setVisible(state) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     visible = state;
     document.documentElement.classList.toggle("safari-v8-address-active", state);
     urlbar.classList.toggle("safari-v8-visible", state);
@@ -220,7 +322,7 @@
     );
     contentHandoffAnimations.push(animation);
     animation.finished.catch(() => null).then(() => {
-      if (disposed) return;
+      if (lifecycle.disposed) return;
       contentHandoffAnimations =
         contentHandoffAnimations.filter(item => item !== animation);
     });
@@ -450,7 +552,7 @@
       iconLabelReveals.set(tab, animations);
       Promise.allSettled(animations.map(animation => animation.finished))
         .then(() => {
-          if (disposed) return;
+          if (lifecycle.disposed) return;
           // A superseded animation must not remove its replacement.
           if (iconLabelReveals.get(tab) === animations) {
             iconLabelReveals.delete(tab);
@@ -494,7 +596,7 @@
   }
 
   function updateNoScrollLayout() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     // display:none can remove navigation space without a width transition.
     // Follow that state change directly as well as animated reservations.
     const back = document.querySelector("#back-button");
@@ -535,6 +637,10 @@
           min-width: 0 !important;
         }
       `;
+      own(() => {
+        noScrollShadowStyle?.remove();
+        noScrollShadowStyle = null;
+      });
       arrow.shadowRoot.appendChild(noScrollShadowStyle);
     }
     const normalTabs = [...gBrowser.tabs].filter(
@@ -732,7 +838,7 @@
   }
 
   function positionUrlbar() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     if (noScrollLayoutEnabled()) {
       positionNoScrollAddress();
       return;
@@ -809,7 +915,7 @@
 
 
   function updatePlusPlacement() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     updateNoScrollLayout();
   }
 
@@ -899,7 +1005,7 @@
 
 
   function updateCleanGlyph() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     glyph.style.removeProperty("opacity");
   }
 
@@ -910,26 +1016,26 @@
   }
 
   function onAddressInput() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     // Input may precede Firefox's usertyping attribute update.
     hideReload();
     updateGlyph();
   }
 
   function updateGlyph() {
-    if (disposed) return;
-    cancelAnimationFrame(glyphFrame);
+    if (lifecycle.disposed) return;
+    scheduler.cancelFrame("glyph");
     if (!visible || !urlbar.classList.contains("safari-v8-visible")) return;
 
     applyGlyph(resolveGlyph());
 
-    guardedMicrotask(() => {
+    scheduler.scheduleMicrotask(() => {
       if (!visible) return;
       applyGlyph(resolveGlyph());
       updateCleanGlyph();
     });
 
-    glyphFrame = guardedFrame(() => {
+    scheduler.scheduleFrame("glyph", () => {
       if (!visible) return;
       applyGlyph(resolveGlyph());
       updateCleanGlyph();
@@ -939,7 +1045,7 @@
 
 
   function positionShelfGeometryProbe() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     const row = document.querySelector("#tabbrowser-arrowscrollbox");
     const rect = row?.getBoundingClientRect();
     const tab = selectedTab();
@@ -963,10 +1069,10 @@
   }
 
   function followShelfGeometryAnimation(duration = 210) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     const token = ++shelfProbeAnimationToken;
     const started = performance.now();
-    cancelAnimationFrame(shelfProbeAnimationFrame);
+    scheduler.cancelFrame("shelf-follow");
 
     const tick = now => {
       if (token !== shelfProbeAnimationToken) return;
@@ -976,20 +1082,18 @@
       positionShelfGeometryProbe();
 
       if (now - started < duration) {
-        shelfProbeAnimationFrame = guardedFrame(tick);
+        scheduler.scheduleFrame("shelf-follow", tick);
       } else {
-        shelfProbeAnimationFrame = 0;
         positionShelfGeometryProbe();
       }
     };
 
-    shelfProbeAnimationFrame = guardedFrame(tick);
+    scheduler.scheduleFrame("shelf-follow", tick);
   }
 
   function render() {
-    if (disposed) return;
-    cancelAnimationFrame(frame);
-    frame = guardedFrame(() => {
+    if (lifecycle.disposed) return;
+    scheduler.scheduleFrame("render", () => {
       /*
        * Firefox owns the complete native new-tab flex animation. Rendering the
        * address transaction from ResizeObserver or focus events during that
@@ -1022,26 +1126,26 @@
   }
 
   function settle() {
-    if (disposed) return;
-    clearTimeout(settleTimer);
+    if (lifecycle.disposed) return;
+    scheduler.cancelTimer("settle");
     render();
-    settleTimer = guardedTimeout(render, 120);
+    scheduler.scheduleTimer("settle", render, 120);
   }
 
   function revealSelectedAddressFromStart() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     input.scrollLeft = 0;
 
-    guardedFrame(() => {
+    scheduler.scheduleFrame("reveal-address", () => {
       input.scrollLeft = 0;
-      guardedTimeout(() => {
+      scheduler.scheduleTimer("reveal-address-timeout", () => {
         input.scrollLeft = 0;
       }, 0);
     });
   }
 
   function openUrlbar() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     const tab = selectedTab();
     if (!tab) return;
 
@@ -1093,7 +1197,7 @@
       );
     }
 
-    guardedFrame(() => {
+    scheduler.scheduleFrame("address-focus", () => {
       if (noScrollLayoutEnabled() && (
         !visible || addressOwner !== tab ||
         selectedTab() !== tab || tab.closing || tab.hidden
@@ -1119,7 +1223,7 @@
   }
 
   function closeUrlbar() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     document.documentElement.classList.remove(
       "safari-v8-opening-reserve"
     );
@@ -1155,7 +1259,10 @@
       tab.classList.remove("safari-v8-content-return");
       void tab.getBoundingClientRect();
       tab.classList.add("safari-v8-content-return");
-      guardedTimeout(() => tab.classList.remove("safari-v8-content-return"), 140);
+      scheduler.scheduleOneShotTimer(
+        () => tab.classList.remove("safari-v8-content-return"),
+        140
+      );
     }
   }
 
@@ -1284,13 +1391,11 @@
 
   // Fixed controls follow the dragged tab's painted native transform.
   let draggedControlTab = null;
-  let draggedControlFrame = 0;
   let draggedControlEnding = false;
   let draggedControlDeadline = 0;
 
   function stopDraggedControls() {
-    cancelAnimationFrame(draggedControlFrame);
-    draggedControlFrame = 0;
+    scheduler.cancelFrame("drag-follow");
     draggedControlTab = null;
     draggedControlEnding = false;
     document.querySelector("#tabbrowser-arrowscrollbox")
@@ -1375,7 +1480,7 @@
   }
 
   function startDraggedControls(event) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     const tab = event.target.closest?.(".tabbrowser-tab");
     if (!noScrollLayoutEnabled() || !tab ||
         tab.hidden || tab.closing) return;
@@ -1385,7 +1490,6 @@
     const row = document.querySelector("#tabbrowser-arrowscrollbox");
     row?.classList.add("safari-v8-drag-shelf-clip");
     const follow = () => {
-      draggedControlFrame = 0;
       const owner = draggedControlTab;
       if (!owner || !owner.isConnected || owner.closing ||
           owner.hidden || (draggedControlEnding &&
@@ -1434,15 +1538,15 @@
           hideReload();
         }
       }
-      draggedControlFrame = guardedFrame(follow);
+      scheduler.scheduleFrame("drag-follow", follow);
     };
-    draggedControlFrame = guardedFrame(follow);
+    scheduler.scheduleFrame("drag-follow", follow);
   }
 
   // Native reordering only receives dragover while the pointer targets tabs.
   // Extend below the shelf by three row heights; distant detach stays native.
   function forwardShelfDrag(event) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     if (!noScrollLayoutEnabled() || !draggedControlTab ||
         draggedControlEnding || tabs.verticalMode || tabs._isCustomizing ||
         draggedControlTab.pinned || draggedControlTab.hidden ||
@@ -1582,7 +1686,7 @@
   }
 
   function onPointerMove(event) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     // Drag ownership must not follow tabs crossed by the pointer.
     if (draggedControlTab) return;
     const onClose =
@@ -1596,8 +1700,6 @@
     const validTab = Boolean(
       hoveredTab && !hoveredTab.hidden && !hoveredTab.closing
     );
-
-    clearTimeout(controlHideTimer);
 
     if (visible) {
       const rect = urlbar.getBoundingClientRect();
@@ -1772,7 +1874,7 @@
   }
 
   function onTabSelect() {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     if (noScrollLayoutEnabled()) {
       cancelContentHandoff();
       const opening = sharedOpeningGeometry;
@@ -1784,8 +1886,7 @@
         } else {
           // A real selection away retires the transaction synchronously.
           // Its queued focus and geometry callbacks must not reclaim paint.
-          cancelAnimationFrame(newTabGeometryFrame);
-          newTabGeometryFrame = 0;
+          scheduler.cancelFrame("opening-geometry");
           newTabGeometryToken += 1;
           clearOpeningContentOcclusion();
           sharedOpeningGeometry = null;
@@ -1810,7 +1911,7 @@
      * geometry. Measure synchronously before the browser paints the reflow.
      */
 
-    guardedMicrotask(() => {
+    scheduler.scheduleMicrotask(() => {
       if (newTabOpening) return;
       // TabSelect may finish after TabOpen's address ownership transaction.
       // Do not retire the new tab's already focused address surface.
@@ -1826,7 +1927,7 @@
   }
 
   function onFocusIn(event) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     if (
       newTabOpening ||
       (event.target !== input && !urlbar.contains(event.target))
@@ -1841,8 +1942,8 @@
   }
 
   function onFocusOut() {
-    if (disposed) return;
-    guardedFrame(() => {
+    if (lifecycle.disposed) return;
+    scheduler.scheduleFrame("focus-out", () => {
       if (newTabOpening) return;
 
       const focused = document.activeElement;
@@ -1861,9 +1962,7 @@
       event.key.toLowerCase() === "t"
     ) {
       restoreTabCommandPending = true;
-      clearTimeout(restoreTabCommandTimer);
-      restoreTabCommandTimer = guardedTimeout(() => {
-        restoreTabCommandTimer = 0;
+      scheduler.scheduleTimer("restore-tab-command", () => {
         restoreTabCommandPending = false;
       }, 1000);
       return;
@@ -1877,7 +1976,7 @@
   }
 
   function finishStableNewTab(openedTab, token) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     if (
       token !== newTabGeometryToken ||
       openedTab !== gBrowser.selectedTab ||
@@ -1924,11 +2023,10 @@
   }
 
   function waitForStableNewTabGeometry(openedTab, token) {
-    if (disposed) return;
-    cancelAnimationFrame(newTabGeometryFrame);
+    if (lifecycle.disposed) return;
+    scheduler.cancelFrame("opening-geometry");
     if (noScrollLayoutEnabled()) {
       const sample = () => {
-        newTabGeometryFrame = 0;
         if (token !== newTabGeometryToken) return;
         if (openedTab !== selectedTab() || openedTab.pinned) {
           clearOpeningContentOcclusion();
@@ -1963,9 +2061,9 @@
           finishStableNewTab(openedTab, token);
           return;
         }
-        newTabGeometryFrame = guardedFrame(sample);
+        scheduler.scheduleFrame("opening-geometry", sample);
       };
-      newTabGeometryFrame = guardedFrame(sample);
+      scheduler.scheduleFrame("opening-geometry", sample);
       return;
     }
 
@@ -1977,7 +2075,7 @@
   // second Cmd+T can consume prepared content. Native policy/counts still
   // decide whether a preload may be created.
   function replenishNewTabPreload(openedTab) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     if (!noScrollLayoutEnabled() || !openedTab?.isConnected ||
         openedTab.closing || !openedTab.linkedPanel ||
         gBrowser.preloadedBrowser || window.closed) return;
@@ -1992,12 +2090,11 @@
   }
 
   function onTabOpen(event) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
 
     const openedTab = event.target;
     const restoringClosedTab = restoreTabCommandPending;
-    clearTimeout(restoreTabCommandTimer);
-    restoreTabCommandTimer = 0;
+    scheduler.cancelTimer("restore-tab-command");
     restoreTabCommandPending = false;
 
     /*
@@ -2007,7 +2104,7 @@
      */
     if (!gBrowserInit.delayedStartupFinished || restoringClosedTab) {
       retireAddressPresentation();
-      guardedMicrotask(() => {
+      scheduler.scheduleMicrotask(() => {
         if (!openedTab.isConnected || openedTab.closing) return;
         updateNoScrollLayout();
         updateSafariDisplayLabel(openedTab);
@@ -2035,14 +2132,12 @@
     hideClose();
     hideReload();
     tabCloseTarget = null;
-    clearTimeout(controlHideTimer);
     cancelContentHandoff();
-    clearTimeout(newTabFocusTimer);
-    cancelAnimationFrame(newTabGeometryFrame);
+    scheduler.cancelFrame("opening-geometry");
 
     // TabOpen precedes native load/selection initialization. Do not create
     // another browser reentrantly inside that unfinished transaction.
-    guardedMicrotask(() => replenishNewTabPreload(openedTab));
+    scheduler.scheduleMicrotask(() => replenishNewTabPreload(openedTab));
     const token = ++newTabGeometryToken;
     clearOpeningContentOcclusion();
     sharedOpeningGeometry = null;
@@ -2091,7 +2186,7 @@
     // TabOpen precedes native selection and browser-load initialization.
     // Focus only after the transaction identifies the still-current
     // opening tab.
-    guardedMicrotask(() => {
+    scheduler.scheduleMicrotask(() => {
       if (
         token !== newTabGeometryToken ||
         openedTab !== selectedTab()
@@ -2105,13 +2200,12 @@
   }
 
   function onTabClose(event) {
-    if (disposed) return;
+    if (lifecycle.disposed) return;
     cancelIconLabelReveal(event.target);
     // Retire the opening transaction before close callbacks can reuse its
     // partial row allocation. A stale RAF must not finish a closing tab.
     if (sharedOpeningGeometry?.tab === event.target) {
-      cancelAnimationFrame(newTabGeometryFrame);
-      newTabGeometryFrame = 0;
+      scheduler.cancelFrame("opening-geometry");
       newTabGeometryToken += 1;
       clearOpeningContentOcclusion();
       sharedOpeningGeometry = null;
@@ -2130,7 +2224,7 @@
     }
     // TabClose precedes the native closing flag on some Firefox versions.
     // Defer allocation to the event's completed native state, not a timer.
-    guardedMicrotask(() => {
+    scheduler.scheduleMicrotask(() => {
       updateNoScrollLayout();
       positionUrlbar();
       positionShelfGeometryProbe();
@@ -2142,37 +2236,40 @@
   const layoutEvents = ["TabClose", "TabMove", "TabPinned", "TabUnpinned"];
 
   urlbar.classList.add("safari-v8-moving");
-  tabs.addEventListener("pointerdown", onTabPointerDown, true);
-  if (typeof originalStartTabDrag === "function") {
-    nativeDragOwner.startTabDrag = startTabDragWithLoneTabImage;
-  }
-  if (typeof originalCheckPinnedBounds === "function") {
-    nativeDragOwner._checkWithinPinnedContainerBounds =
-      checkPinnedBoundsWithoutCompactCue;
-  }
-  tabs.addEventListener("dragstart", startDraggedControls, true);
-  window.addEventListener("dragover", forwardShelfDrag, true);
-  window.addEventListener("drop", forwardShelfDrag, true);
-  window.addEventListener("dragend", finishDraggedControls, true);
-  window.addEventListener("drop", finishDraggedControls, true);
-  tabs.addEventListener("click", onTabClick);
-  tabs.addEventListener("TabSelect", onTabSelect);
-  tabs.addEventListener("TabOpen", onTabOpen);
-  tabs.addEventListener("TabClose", onTabClose);
-  layoutEvents.forEach(name => tabs.addEventListener(name, settle));
-  document.addEventListener("focusin", onFocusIn, true);
-  document.addEventListener("focusout", onFocusOut, true);
-  document.addEventListener("pointermove", onPointerMove, true);
-  window.addEventListener("keydown", onKeyDown, true);
-  window.addEventListener("resize", settle);
-  closeButton.addEventListener("pointerdown", blockClosePress, true);
-  closeButton.addEventListener("mousedown", blockClosePress, true);
-  closeButton.addEventListener("click", closeSelectedTab, true);
-  reloadButton.addEventListener("pointerdown", blockReloadPress, true);
-  reloadButton.addEventListener("mousedown", blockReloadPress, true);
-  reloadButton.addEventListener("click", reloadSelectedTab, true);
+  ownEvent(tabs, "pointerdown", onTabPointerDown, true);
+  patchMethod(
+    nativeDragOwner,
+    "startTabDrag",
+    startTabDragWithLoneTabImage
+  );
+  patchMethod(
+    nativeDragOwner,
+    "_checkWithinPinnedContainerBounds",
+    checkPinnedBoundsWithoutCompactCue
+  );
+  ownEvent(tabs, "dragstart", startDraggedControls, true);
+  ownEvent(window, "dragover", forwardShelfDrag, true);
+  ownEvent(window, "drop", forwardShelfDrag, true);
+  ownEvent(window, "dragend", finishDraggedControls, true);
+  ownEvent(window, "drop", finishDraggedControls, true);
+  ownEvent(tabs, "click", onTabClick);
+  ownEvent(tabs, "TabSelect", onTabSelect);
+  ownEvent(tabs, "TabOpen", onTabOpen);
+  ownEvent(tabs, "TabClose", onTabClose);
+  layoutEvents.forEach(name => ownEvent(tabs, name, settle));
+  ownEvent(document, "focusin", onFocusIn, true);
+  ownEvent(document, "focusout", onFocusOut, true);
+  ownEvent(document, "pointermove", onPointerMove, true);
+  ownEvent(window, "keydown", onKeyDown, true);
+  ownEvent(window, "resize", settle);
+  ownEvent(closeButton, "pointerdown", blockClosePress, true);
+  ownEvent(closeButton, "mousedown", blockClosePress, true);
+  ownEvent(closeButton, "click", closeSelectedTab, true);
+  ownEvent(reloadButton, "pointerdown", blockReloadPress, true);
+  ownEvent(reloadButton, "mousedown", blockReloadPress, true);
+  ownEvent(reloadButton, "click", reloadSelectedTab, true);
 
-  glyphObserver = new MutationObserver(updateGlyph);
+  const glyphObserver = ownObserver(new MutationObserver(updateGlyph));
 
   const urlbarView = document.querySelector(".urlbarView");
   if (urlbarView) {
@@ -2184,40 +2281,35 @@
     });
   }
 
-  input.addEventListener("input", onAddressInput, true);
-  input.addEventListener("select", updateGlyph, true);
-  input.addEventListener("focus", updateGlyph, true);
+  ownEvent(input, "input", onAddressInput, true);
+  ownEvent(input, "select", updateGlyph, true);
+  ownEvent(input, "focus", updateGlyph, true);
 
-  tabs.addEventListener("TabAttrModified", updateGlyph);
-  tabs.addEventListener("TabAttrModified", onSafariTabAttrModified);
+  ownEvent(tabs, "TabAttrModified", updateGlyph);
+  ownEvent(tabs, "TabAttrModified", onSafariTabAttrModified);
 
-  resizeObserver = new ResizeObserver(render);
+  const resizeObserver = ownObserver(new ResizeObserver(render));
   resizeObserver.observe(toolbar);
 
   const cleanup = () => {
-    if (disposed) return;
-    disposed = true;
+    if (lifecycle.disposed) return;
+
+    /*
+     * Invalidate asynchronous work before releasing resources. A callback
+     * queued by this instance can never act on a replacement instance.
+     */
+    lifecycle.disposed = true;
+    scheduler.invalidate();
+    newTabGeometryToken += 1;
+    shelfProbeAnimationToken += 1;
+    newTabOpening = false;
+    restoreTabCommandPending = false;
 
     clearIconLabelReveals();
     stopDraggedControls();
-    tabs.removeEventListener("dragstart", startDraggedControls, true);
-    if (nativeDragOwner?.startTabDrag === startTabDragWithLoneTabImage) {
-      nativeDragOwner.startTabDrag = originalStartTabDrag;
-    }
-    if (nativeDragOwner?._checkWithinPinnedContainerBounds ===
-        checkPinnedBoundsWithoutCompactCue) {
-      nativeDragOwner._checkWithinPinnedContainerBounds =
-        originalCheckPinnedBounds;
-    }
-    window.removeEventListener("dragover", forwardShelfDrag, true);
-    window.removeEventListener("drop", forwardShelfDrag, true);
-    window.removeEventListener("dragend", finishDraggedControls, true);
-    window.removeEventListener("drop", finishDraggedControls, true);
     clearOpeningContentOcclusion();
     sharedOpeningGeometry = null;
     document.documentElement.classList.remove("safari-v8-opening-clock");
-    noScrollShadowStyle?.remove();
-    noScrollShadowStyle = null;
     for (const [element, value] of noScrollFlexAttributes) {
       if (!element.hasAttribute("flex")) element.setAttribute("flex", value);
     }
@@ -2238,54 +2330,8 @@
       tab.style.removeProperty("--safari-v8-tab-grow");
       tab.style.removeProperty("--safari-v8-content-center");
     }
-    document.documentElement.classList.remove(
-      "safari-v8-opening-reserve"
-    );
-    cancelAnimationFrame(frame);
-    cancelAnimationFrame(glyphFrame);
-    cancelAnimationFrame(newTabGeometryFrame);
-    newTabGeometryToken += 1;
-    clearTimeout(settleTimer);
-
-
-    clearTimeout(newTabFocusTimer);
-    clearTimeout(controlHideTimer);
-    shelfProbeAnimationToken += 1;
-    cancelAnimationFrame(shelfProbeAnimationFrame);
-    newTabOpening = false;
-    clearTimeout(restoreTabCommandTimer);
-    restoreTabCommandTimer = 0;
-    restoreTabCommandPending = false;
-    resizeObserver?.disconnect();
-    glyphObserver?.disconnect();
+    document.documentElement.classList.remove("safari-v8-opening-reserve");
     hideCleanGlyph();
-    tabs.removeEventListener(
-      "pointerdown",
-      onTabPointerDown,
-      true
-    );
-    tabs.removeEventListener("click", onTabClick);
-    tabs.removeEventListener("TabSelect", onTabSelect);
-    tabs.removeEventListener("TabOpen", onTabOpen);
-    tabs.removeEventListener("TabClose", onTabClose);
-    tabs.removeEventListener("TabAttrModified", updateGlyph);
-    tabs.removeEventListener("TabAttrModified", onSafariTabAttrModified);
-    input.removeEventListener("input", onAddressInput, true);
-    input.removeEventListener("select", updateGlyph, true);
-    input.removeEventListener("focus", updateGlyph, true);
-
-    layoutEvents.forEach(name => tabs.removeEventListener(name, settle));
-    document.removeEventListener("focusin", onFocusIn, true);
-    document.removeEventListener("focusout", onFocusOut, true);
-    document.removeEventListener("pointermove", onPointerMove, true);
-    window.removeEventListener("keydown", onKeyDown, true);
-    window.removeEventListener("resize", settle);
-    closeButton.removeEventListener("pointerdown", blockClosePress, true);
-    closeButton.removeEventListener("mousedown", blockClosePress, true);
-    closeButton.removeEventListener("click", closeSelectedTab, true);
-    reloadButton.removeEventListener("pointerdown", blockReloadPress, true);
-    reloadButton.removeEventListener("mousedown", blockReloadPress, true);
-    reloadButton.removeEventListener("click", reloadSelectedTab, true);
     retireAddressPresentation();
     clearAddressState();
     tabs.querySelectorAll(".safari-v8-compact-tab").forEach(tab => {
@@ -2308,9 +2354,14 @@
     glyph.style.removeProperty("list-style-image");
     glyph.classList.remove("safari-v8-search-glyph");
     glyphSlot.classList.remove("safari-v8-close-mask");
-    closeButton.remove();
-    reloadButton.remove();
-    shelfProbe.remove();
+
+    while (lifecycle.disposers.length) {
+      try {
+        lifecycle.disposers.pop()();
+      } catch (error) {
+        console.error("Safari Compact: resource cleanup failed", error);
+      }
+    }
     if (window.__safariCompactCleanup === cleanup) {
       delete window.__safariCompactCleanup;
     }
