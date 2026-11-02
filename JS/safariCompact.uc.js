@@ -334,6 +334,209 @@
     );
   }
 
+  function pixels(value) {
+    return Number.parseFloat(value) || 0;
+  }
+
+  function clamp(value, minimum, maximum) {
+    return Math.max(minimum, Math.min(maximum, value));
+  }
+
+  function setStyleProperty(element, name, value, priority = "") {
+    if (!element) return;
+    if (element.style.getPropertyValue(name) === value &&
+        element.style.getPropertyPriority(name) === priority) return;
+    element.style.setProperty(name, value, priority);
+  }
+
+  function setPixelProperty(element, name, value, priority = "") {
+    setStyleProperty(element, name, `${value.toFixed(3)}px`, priority);
+  }
+
+  function setClassState(element, name, enabled) {
+    if (!element || element.classList.contains(name) === enabled) return;
+    element.classList.toggle(name, enabled);
+  }
+
+  function tabPaintRect(tab) {
+    return tab?.querySelector(".tab-background")?.getBoundingClientRect() ||
+      tab?.getBoundingClientRect() || null;
+  }
+
+  function eligibleTabs() {
+    return [...gBrowser.tabs].filter(
+      tab => !tab.hidden && !tab.closing && !tab.pinned
+    );
+  }
+
+  /*
+   * Shared shelf capture authority. Every field below is a browser-state or
+   * DOM read. Callers derive presentation from this immutable transaction
+   * snapshot rather than independently measuring the same shelf.
+   */
+  function captureShelfMetrics({includeTabs = false} = {}) {
+    const ordinaryTabs = eligibleTabs();
+    const active = selectedTab();
+    const containerRect = tabs.getBoundingClientRect();
+    const containerStyle = getComputedStyle(tabs);
+    const paddingLeft = pixels(containerStyle.paddingLeft);
+    const paddingRight = pixels(containerStyle.paddingRight);
+    const pinnedRect = document.querySelector("#pinned-tabs-container")
+      ?.getBoundingClientRect() || null;
+    const arrow = document.querySelector("#tabbrowser-arrowscrollbox");
+    const arrowRect = arrow?.getBoundingClientRect() || null;
+    const opening = sharedOpeningGeometry;
+    const presentationOpening = newTabOpening && opening;
+    const closing = !newTabOpening && [...gBrowser.tabs].some(tab =>
+      tab.closing || tab.classList.contains("safari-v8-retiring")
+    );
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+
+    const tabMetrics = includeTabs
+      ? ordinaryTabs.map(tab => {
+          const rect = tab.getBoundingClientRect();
+          const content = tab.querySelector(".tab-content");
+          const icon = tab.querySelector(".tab-icon-stack");
+          const label = tab.querySelector(".tab-label");
+          const labelContainer = tab.querySelector(".tab-label-container");
+          const contentRect = content?.getBoundingClientRect() || null;
+          const iconRect = icon?.getBoundingClientRect() || null;
+          const contentStyle = content ? getComputedStyle(content) : null;
+          const fontStyle = label ? getComputedStyle(label, "::after") : null;
+          return {
+            tab,
+            rect,
+            content,
+            icon,
+            labelContainer,
+            contentRect,
+            iconRect,
+            contentStyle,
+            fontSize: pixels(fontStyle?.fontSize),
+            currentIconOnly:
+              tab.classList.contains("safari-v8-icon-only")
+          };
+        })
+      : [];
+
+    return {
+      ordinaryTabs,
+      active,
+      activeIncluded: ordinaryTabs.includes(active),
+      containerRect,
+      paddingLeft,
+      paddingRight,
+      pinnedWidth: pinnedRect?.width || 0,
+      arrow,
+      arrowRect,
+      opening,
+      presentationOpening,
+      closing,
+      reduceMotion,
+      newTabOpening,
+      draggedControlTab,
+      viewportWidth: window.innerWidth,
+      tabMetrics
+    };
+  }
+
+  /*
+   * Pure no-scroll derivation. It receives all browser and DOM measurements
+   * through the capture snapshot and performs no reads or writes itself.
+   */
+  function deriveNoScrollGeometry(snapshot) {
+    const count = snapshot.ordinaryTabs.length;
+    const available = Math.max(
+      0,
+      snapshot.containerRect.width -
+        snapshot.paddingLeft -
+        snapshot.paddingRight -
+        snapshot.pinnedWidth
+    );
+    if (!count || available <= 0) return null;
+
+    const rowWidth = Math.min(
+      available,
+      snapshot.viewportWidth * count / 4
+    );
+    const allocation = noScrollTabAllocation(
+      rowWidth,
+      count,
+      snapshot.activeIncluded
+    );
+    const start = snapshot.containerRect.left +
+      snapshot.paddingLeft + snapshot.pinnedWidth;
+    const targetOffset = clamp(
+      (snapshot.viewportWidth - rowWidth) / 2 - start,
+      0,
+      available - rowWidth
+    );
+    const opening = snapshot.opening;
+    const progress = opening?.progress ?? 1;
+    const paintedRowWidth = opening && !opening.fullShelf
+      ? opening.width + (rowWidth - opening.width) * progress
+      : rowWidth;
+    const rowOffset = opening && !opening.fullShelf
+      ? opening.left - start +
+        (targetOffset - (opening.left - start)) * progress
+      : targetOffset;
+    const stationaryRight = opening &&
+      count > 4 &&
+      snapshot.ordinaryTabs.at(-1) === opening.tab &&
+      opening.fullShelf
+      ? start + targetOffset + rowWidth
+      : null;
+
+    const tabGeometry = snapshot.tabMetrics.map((metric, index) => {
+      const active = metric.tab === snapshot.active;
+      const width = active ? allocation.selected : allocation.ordinary;
+      let iconOnly = false;
+
+      if (!active && metric.contentRect && metric.iconRect &&
+          metric.contentStyle) {
+        const style = metric.contentStyle;
+        const gap = Math.max(5.5, pixels(style.columnGap));
+        const textBudget = metric.contentRect.width -
+          pixels(style.borderLeftWidth) -
+          pixels(style.borderRightWidth) -
+          Math.max(30, pixels(style.paddingLeft)) -
+          Math.max(8, pixels(style.paddingRight)) -
+          metric.iconRect.width - gap;
+        const minimumTextBudget = 2.75 * (metric.fontSize || 13);
+        const releasedWidth = snapshot.closing
+          ? Math.max(0, width - metric.rect.width)
+          : 0;
+        const openingWidthDelta = snapshot.presentationOpening
+          ? width - metric.rect.width
+          : 0;
+        iconOnly = textBudget + releasedWidth + openingWidthDelta <
+          minimumTextBudget;
+      }
+
+      return {
+        ...metric,
+        active,
+        width,
+        grow: active ? allocation.selectedGrow : 1,
+        startInset: index === 0 ? 2 : 0,
+        endInset: index === count - 1 ? 3 : 0,
+        iconOnly
+      };
+    });
+
+    return {
+      available,
+      paintedRowWidth,
+      editWidth: allocation.selected,
+      rowOffset,
+      stationaryRight,
+      dense: count >= 9,
+      tabGeometry
+    };
+  }
+
   // Mask text/icons behind the moving capsule without changing glass paint,
   // native tab allocation, or pointer targets.
   const openingContentMasks = new Set();
@@ -435,42 +638,40 @@
     for (const content of retained) openingContentMasks.add(content);
   }
 
-  function positionNoScrollAddress() {
-    updateNoScrollLayout();
+  function positionNoScrollAddress(geometry = null) {
+    geometry ||= updateNoScrollLayout();
     const tab = selectedTab();
     if (!tab) return;
 
-    const rect = tab.getBoundingClientRect();
-    // Native URL focus can select a different color scheme than the source tab.
-    // Resolve the address material in the source content's scheme instead.
+    const metric = geometry?.tabGeometry.find(item => item.tab === tab);
+    const rect = metric?.rect || tab.getBoundingClientRect();
     const sourceContent = tab.querySelector(".tab-content") || tab;
-    const sourceScheme = getComputedStyle(sourceContent).colorScheme;
-    if (urlbar.style.getPropertyValue("--safari-v8-source-scheme") !== sourceScheme) {
-      urlbar.style.setProperty("--safari-v8-source-scheme", sourceScheme);
-    }
-    // Address paint must use the same endpoint allocation as its source tab.
-    // The source stack starts one native border pixel inside the tab.
+    setStyleProperty(
+      urlbar,
+      "--safari-v8-source-scheme",
+      getComputedStyle(sourceContent).colorScheme
+    );
+
     for (const name of ["--safari-v8-pill-start", "--safari-v8-pill-end"]) {
-      const value = tab.style.getPropertyValue(name);
-      if (urlbar.style.getPropertyValue(name) !== value) {
-        urlbar.style.setProperty(name, value);
-      }
+      setStyleProperty(urlbar, name, tab.style.getPropertyValue(name));
     }
-    // Keep the new capsule at its target width instead of growing its
-    // text-bearing surface from the native tab's near-zero opening width.
+
     const opening = sharedOpeningGeometry;
     const targetWidth = opening?.tab === tab
-      ? Number.parseFloat(tabs.style.getPropertyValue("--safari-v8-edit-width"))
+      ? geometry?.editWidth
       : rect.width;
     const width = Math.max(1, targetWidth || rect.width);
     const left = opening?.tab === tab
       ? (opening.stationaryRight ?? rect.right) - width
       : rect.left;
-    urlbar.style.setProperty("--safari-v8-left", `${left}px`);
-    urlbar.style.setProperty("--safari-v8-top", `${rect.top + 4}px`);
-    urlbar.style.setProperty("--safari-v8-width", `${width}px`);
-    urlbar.style.setProperty(
-      "--safari-v8-height", `${Math.max(1, rect.height - 8)}px`
+
+    setPixelProperty(urlbar, "--safari-v8-left", left);
+    setPixelProperty(urlbar, "--safari-v8-top", rect.top + 4);
+    setPixelProperty(urlbar, "--safari-v8-width", width);
+    setPixelProperty(
+      urlbar,
+      "--safari-v8-height",
+      Math.max(1, rect.height - 8)
     );
     updateOpeningContentOcclusion(left, left + width);
     updateOpeningContentSlide();
@@ -561,44 +762,45 @@
     }
   }
 
-  function centerInactiveTabContent(normalTabs, active) {
-    const updates = normalTabs.map(tab => {
+  function centerInactiveTabContent(tabGeometry, active) {
+    /*
+     * The icon-only class commit changes intrinsic content widths. This is a
+     * documented endpoint flush: read every correction first, then publish.
+     */
+    const updates = tabGeometry.map(metric => {
       let correction = 0;
-      if (normalTabs.length > 4 && tab !== active &&
-          !tab.classList.contains("safari-v8-icon-only")) {
-        const content = tab.querySelector(".tab-content");
-        const icon = tab.querySelector(".tab-icon-stack");
-        const label = tab.querySelector(".tab-label-container");
-        if (content && icon && label) {
-          const style = getComputedStyle(content);
-          const pixels = value => Number.parseFloat(value) || 0;
-          const leading = pixels(style.paddingLeft);
-          const trailing = pixels(style.paddingRight);
-          const groupWidth = icon.offsetWidth + label.offsetWidth +
-            pixels(style.columnGap);
-          const freeSpace = Math.max(0,
-            content.clientWidth - leading - trailing - groupWidth);
-          // Center against the whole content box where possible, but
-          // never move the group into the permanent leading close slot.
-          correction = -Math.min(
-            Math.max(0, (leading - trailing) / 2),
-            freeSpace / 2
-          );
-        }
+      if (tabGeometry.length > 4 && metric.tab !== active &&
+          !metric.iconOnly && metric.content && metric.icon &&
+          metric.labelContainer) {
+        const style = getComputedStyle(metric.content);
+        const leading = pixels(style.paddingLeft);
+        const trailing = pixels(style.paddingRight);
+        const groupWidth = metric.icon.offsetWidth +
+          metric.labelContainer.offsetWidth + pixels(style.columnGap);
+        const freeSpace = Math.max(
+          0,
+          metric.content.clientWidth - leading - trailing - groupWidth
+        );
+        correction = -Math.min(
+          Math.max(0, (leading - trailing) / 2),
+          freeSpace / 2
+        );
       }
-      return {tab, value: `${correction.toFixed(3)}px`};
+      return {tab: metric.tab, correction};
     });
-    for (const {tab, value} of updates) {
-      if (tab.style.getPropertyValue("--safari-v8-content-center") !== value) {
-        tab.style.setProperty("--safari-v8-content-center", value);
-      }
+
+    for (const update of updates) {
+      setPixelProperty(
+        update.tab,
+        "--safari-v8-content-center",
+        update.correction
+      );
     }
   }
 
   function updateNoScrollLayout() {
-    if (lifecycle.disposed) return;
-    // display:none can remove navigation space without a width transition.
-    // Follow that state change directly as well as animated reservations.
+    if (lifecycle.disposed) return null;
+
     const back = document.querySelector("#back-button");
     const forward = document.querySelector("#forward-button");
     const navigationState = [back, forward].map(button =>
@@ -617,13 +819,17 @@
         (animation.playState === "running" ||
           animation.playState === "pending")
       ));
-    document.documentElement.classList.toggle(
-      "safari-v8-navigation-layout-follow", navigationWidthMoving
-    );
+
     const arrow = document.querySelector("#tabbrowser-arrowscrollbox");
+    /*
+     * Native flex removal changes the geometry being captured. This is the
+     * sole preparatory write. The following rect read is an intentional layout
+     * flush before the capture/derive/commit transaction begins.
+     */
+    const hadNativeFlex = arrow?.hasAttribute("flex");
     releaseNativeFlex(arrow);
-    // Style inside the shadow root: hidden native arrows still occupied 28px
-    // on each side when the external ::part rules did not take effect.
+    if (hadNativeFlex) void arrow.getBoundingClientRect();
+
     if (arrow?.shadowRoot && !noScrollShadowStyle) {
       noScrollShadowStyle = document.createElementNS(
         "http://www.w3.org/1999/xhtml", "style"
@@ -642,238 +848,142 @@
         noScrollShadowStyle = null;
       });
       arrow.shadowRoot.appendChild(noScrollShadowStyle);
+      // The shadow rule changes the shelf measurement. Flush it once before
+      // capturing the transaction snapshot.
+      void arrow.getBoundingClientRect();
     }
-    const normalTabs = [...gBrowser.tabs].filter(
-      tab => !tab.hidden && !tab.closing && !tab.pinned
-    );
-    if (!normalTabs.length) return;
 
-    const container = tabs.getBoundingClientRect();
-    const style = getComputedStyle(tabs);
-    const padding =
-      (Number.parseFloat(style.paddingLeft) || 0) +
-      (Number.parseFloat(style.paddingRight) || 0);
-    const pinned = document.querySelector("#pinned-tabs-container");
-    const pinnedWidth = pinned?.getBoundingClientRect().width || 0;
-    const available = Math.max(0, container.width - padding - pinnedWidth);
-    if (available <= 0) return;
+    const snapshot = captureShelfMetrics({includeTabs: true});
+    const geometry = deriveNoScrollGeometry(snapshot);
+    if (!geometry) return null;
+    geometry.snapshot = snapshot;
 
     /*
-     * Equal tab shares fill a centered shelf that reaches the available
-     * row width at four tabs. Editing changes content alignment only.
-     * The four-tab threshold follows the requested reference behavior.
+     * Commit phase. Measurements above are complete; publish only changed CSS
+     * properties and state classes until the documented endpoint flush below.
      */
-    // One centered quarter, then half, three quarters and full width.
-    // Highlight never participates in this allocation.
-    const count = normalTabs.length;
-    // The inherited selected-tab minimum defeats opening at dense counts.
-    // Keep this state after opening to avoid restoring the clamp at handoff.
-    document.documentElement.classList.toggle(
-      "safari-v8-dense-tabs", count >= 9
+    setClassState(
+      document.documentElement,
+      "safari-v8-navigation-layout-follow",
+      navigationWidthMoving
     );
-    const rowWidth = Math.min(available, window.innerWidth * count / 4);
-    const active = selectedTab();
-    const allocation = noScrollTabAllocation(
-      rowWidth, count, normalTabs.includes(active)
+    setClassState(
+      document.documentElement,
+      "safari-v8-dense-tabs",
+      geometry.dense
     );
-    // Selection, not address focus, owns the larger real tab allocation.
-    const editingWidth = allocation.selected;
+    setPixelProperty(
+      tabs,
+      "--safari-v8-row-width",
+      geometry.paintedRowWidth
+    );
+    setPixelProperty(tabs, "--safari-v8-edit-width", geometry.editWidth);
+    setPixelProperty(tabs, "--safari-v8-row-offset", geometry.rowOffset);
 
-    const setPixels = (name, value) => {
-      const next = `${value.toFixed(3)}px`;
-      if (tabs.style.getPropertyValue(name) !== next) {
-        tabs.style.setProperty(name, next);
-      }
-    };
-    const opening = sharedOpeningGeometry;
-    const progress = opening?.progress ?? 1;
-    // A shelf already filling its allocation follows navigation geometry
-    // directly. Only actual shelf growth uses the opening interpolation.
-    const paintedRowWidth = opening && !opening.fullShelf
-      ? opening.width + (rowWidth - opening.width) * progress
-      : rowWidth;
-    setPixels("--safari-v8-row-width", paintedRowWidth);
-    setPixels("--safari-v8-edit-width", editingWidth);
-    const start = container.left +
-      (Number.parseFloat(style.paddingLeft) || 0) + pinnedWidth;
-    const targetOffset = Math.max(0, Math.min(available - rowWidth,
-      (window.innerWidth - rowWidth) / 2 - start));
-    if (opening) {
-      // Only append-to-end openings on an already full shelf use a stationary
-      // foreground. Growing shelves and middle insertions retain native motion.
-      // Eligibility belongs to the opening transaction, not a per-frame
-      // comparison against a target changed by navigation-button collapse.
-      const stationary = count > 4 &&
-        normalTabs.at(-1) === opening.tab &&
-        opening.fullShelf;
-      opening.stationaryRight = stationary
-        ? start + targetOffset + rowWidth
-        : null;
+    if (snapshot.opening) {
+      snapshot.opening.stationaryRight = geometry.stationaryRight;
     }
-    setPixels("--safari-v8-row-offset", opening && !opening.fullShelf
-      ? opening.left - start +
-        (targetOffset - (opening.left - start)) * progress
-      : targetOffset);
 
-    for (const [index, tab] of normalTabs.entries()) {
-      const isActive = tab === active;
-      for (const [name, value] of [
-        ["--safari-v8-tab-width",
-          `${(isActive ? allocation.selected : allocation.ordinary).toFixed(3)}px`],
-        ["--safari-v8-tab-grow",
-          String(isActive ? allocation.selectedGrow : 1)]
-      ]) {
-        if (tab.style.getPropertyValue(name) !== value) {
-          tab.style.setProperty(name, value);
-        }
-      }
-      // The native tab's leading border already contributes one pixel.
-      // Only shelf endpoints need a full inset; internal seams stay narrow.
-      const startInset = index === 0 ? "2px" : "0px";
-      const endInset = index === normalTabs.length - 1 ? "3px" : "0px";
-      if (tab.style.getPropertyValue("--safari-v8-pill-start") !== startInset) {
-        tab.style.setProperty("--safari-v8-pill-start", startInset);
-      }
-      if (tab.style.getPropertyValue("--safari-v8-pill-end") !== endInset) {
-        tab.style.setProperty("--safari-v8-pill-end", endInset);
-      }
-      releaseNativeFlex(tab.querySelector(".tab-label-container"));
-      tab.classList.toggle(
+    for (const metric of geometry.tabGeometry) {
+      setPixelProperty(metric.tab, "--safari-v8-tab-width", metric.width);
+      setStyleProperty(
+        metric.tab,
+        "--safari-v8-tab-grow",
+        String(metric.grow)
+      );
+      setPixelProperty(
+        metric.tab,
+        "--safari-v8-pill-start",
+        metric.startInset
+      );
+      setPixelProperty(
+        metric.tab,
+        "--safari-v8-pill-end",
+        metric.endInset
+      );
+      releaseNativeFlex(metric.labelContainer);
+      setClassState(
+        metric.tab,
         "safari-v8-address",
-        visible && tab === active
+        visible && metric.tab === snapshot.active
       );
     }
 
-    // TabOpen can precede native selection. Do not classify the old
-    // selected tab using its temporary selected allocation.
-    const presentationOpening = newTabOpening && sharedOpeningGeometry;
-    if (presentationOpening && presentationOpening.tab !== active) return;
+    if (snapshot.presentationOpening &&
+        snapshot.presentationOpening.tab !== snapshot.active) {
+      return geometry;
+    }
 
-    const revealOrigins = [];
-    const presentationChanges = [];
-    // During closing, the final allocation is already known. Start revealing
-    // labels as space is released, rather than waiting for the width threshold
-    // late in the native transition. Settled compression rules stay unchanged.
-    const closingLayout = !newTabOpening && [...gBrowser.tabs].some(tab =>
-      tab.closing || tab.classList.contains("safari-v8-retiring")
-    );
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
     for (const tab of [...iconLabelReveals.keys()]) {
-      if (!normalTabs.includes(tab) || tab === active ||
-          newTabOpening || draggedControlTab || reduceMotion) {
+      if (!snapshot.ordinaryTabs.includes(tab) ||
+          tab === snapshot.active ||
+          snapshot.newTabOpening ||
+          snapshot.draggedControlTab ||
+          snapshot.reduceMotion) {
         cancelIconLabelReveal(tab);
       }
     }
 
-    // Evaluate the text budget, not a fixed outer tab width.
-    // Allow a shorter proportional-font prefix before switching to icons.
-    // The 2.75em budget includes ellipsis; this is visual calibration,
-    // not a measured Safari constant or a fixed character count.
-    for (const tab of normalTabs) {
-      let iconOnly = false;
-      if (tab !== active) {
-        const content = tab.querySelector(".tab-content");
-        const icon = tab.querySelector(".tab-icon-stack");
-        const label = tab.querySelector(".tab-label");
-        if (content && icon && label) {
-          const style = getComputedStyle(content);
-          const font = getComputedStyle(label, "::after");
-          const pixels = value => Number.parseFloat(value) || 0;
-          // Evaluate labelled-state padding and gap in both states.
-          // Centering icon-only content must not change the text threshold
-          // or make the presentation oscillate with its own class.
-          const gap = Math.max(5.5, pixels(style.columnGap));
-          const textBudget = content.getBoundingClientRect().width -
-            pixels(style.borderLeftWidth) - pixels(style.borderRightWidth) -
-            Math.max(30, pixels(style.paddingLeft)) -
-            Math.max(8, pixels(style.paddingRight)) -
-            icon.getBoundingClientRect().width - gap;
-          const minimumTextBudget = 2.75 * (pixels(font.fontSize) || 13);
-          const targetWidth = Number.parseFloat(
-            tab.style.getPropertyValue("--safari-v8-tab-width")
-          );
-          const releasedWidth = closingLayout && Number.isFinite(targetWidth)
-            ? Math.max(0, targetWidth - tab.getBoundingClientRect().width)
-            : 0;
-          // During opening, classify against the assigned endpoint,
-          // not transient widths as the former selected tab contracts.
-          // Closing retains its separately approved early-reveal behavior.
-          const openingWidthDelta = presentationOpening &&
-            Number.isFinite(targetWidth)
-            ? targetWidth - tab.getBoundingClientRect().width
-            : 0;
-          iconOnly = textBudget + releasedWidth + openingWidthDelta <
-            minimumTextBudget;
-        }
+    const revealCandidates = [];
+    for (const metric of geometry.tabGeometry) {
+      if (metric.currentIconOnly === metric.iconOnly) continue;
+      cancelIconLabelReveal(metric.tab);
+      if (metric.currentIconOnly && !metric.iconOnly &&
+          metric.tab !== snapshot.active &&
+          !snapshot.newTabOpening &&
+          !snapshot.draggedControlTab &&
+          !snapshot.reduceMotion &&
+          metric.icon && metric.labelContainer &&
+          metric.iconRect?.width > 0) {
+        revealCandidates.push({
+          tab: metric.tab,
+          icon: metric.icon,
+          label: metric.labelContainer,
+          localLeft: metric.iconRect.left - metric.rect.left
+        });
       }
-      const wasIconOnly = tab.classList.contains("safari-v8-icon-only");
-      if (wasIconOnly === iconOnly) continue;
-      cancelIconLabelReveal(tab);
-      if (wasIconOnly && !iconOnly && tab !== active &&
-          !newTabOpening && !draggedControlTab && !reduceMotion) {
-        const icon = tab.querySelector(".tab-icon-stack");
-        const label = tab.querySelector(".tab-label-container");
-        if (icon && label) {
-          const iconRect = icon.getBoundingClientRect();
-          if (iconRect.width > 0) {
-            revealOrigins.push({
-              tab, icon, label,
-              localLeft: iconRect.left - tab.getBoundingClientRect().left
-            });
-          }
-        }
-      }
-      presentationChanges.push({tab, iconOnly});
+      setClassState(
+        metric.tab,
+        "safari-v8-icon-only",
+        metric.iconOnly
+      );
     }
-    // Batch class writes after all source measurements.
-    for (const {tab, iconOnly} of presentationChanges) {
-      tab.classList.toggle("safari-v8-icon-only", iconOnly);
-    }
-    // Establish final presentation before measuring reveal destinations.
-    // Relative positioning is independent of the reveal's animated translate.
-    centerInactiveTabContent(normalTabs, active);
-    animateIconLabelReveals(revealOrigins);
+
+    centerInactiveTabContent(geometry.tabGeometry, snapshot.active);
+    animateIconLabelReveals(revealCandidates);
+    return geometry;
   }
 
-  function positionUrlbar() {
+  function positionUrlbar(geometry = null) {
     if (lifecycle.disposed) return;
     if (noScrollLayoutEnabled()) {
-      positionNoScrollAddress();
+      positionNoScrollAddress(geometry);
       return;
     }
     const tab = selectedTab();
     if (!tab) return;
 
     const rect = tab.getBoundingClientRect();
-    /*
-     * The input container already supplies the four-pixel optical inset.
-     * Adding another outer inset here doubled the first-tab shelf gap.
-     */
     const xGap = 0;
     const yGap = 4;
-
-    /*
-     * Follow the real selected-tab width. Predicting a 225 px new-tab width
-     * conflicts with Firefox's overflow reflow and makes the address surface
-     * and new-tab button jump when the native opening animation settles.
-     */
-    const requestedTabWidth = rect.width;
-    urlbar.style.setProperty("--safari-v8-left", `${rect.left + xGap}px`);
-    urlbar.style.setProperty("--safari-v8-top", `${rect.top + yGap}px`);
-    urlbar.style.setProperty(
+    setPixelProperty(urlbar, "--safari-v8-left", rect.left + xGap);
+    setPixelProperty(urlbar, "--safari-v8-top", rect.top + yGap);
+    setPixelProperty(
+      urlbar,
       "--safari-v8-width",
-      `${Math.max(1, requestedTabWidth - xGap * 2)}px`
+      Math.max(1, rect.width - xGap * 2)
     );
-    urlbar.style.setProperty("--safari-v8-height", `${Math.max(1, rect.height - yGap * 2)}px`);
+    setPixelProperty(
+      urlbar,
+      "--safari-v8-height",
+      Math.max(1, rect.height - yGap * 2)
+    );
 
     if (visible) {
       clearAddressState();
       tab.classList.add("safari-v8-address");
     }
   }
-
 
   function plusButton() {
     return document.querySelector("#new-tab-button");
@@ -915,8 +1025,8 @@
 
 
   function updatePlusPlacement() {
-    if (lifecycle.disposed) return;
-    updateNoScrollLayout();
+    if (lifecycle.disposed) return null;
+    return updateNoScrollLayout();
   }
 
 
@@ -1044,28 +1154,28 @@
   }
 
 
-  function positionShelfGeometryProbe() {
+  function positionShelfGeometryProbe(snapshot = null) {
     if (lifecycle.disposed) return;
-    const row = document.querySelector("#tabbrowser-arrowscrollbox");
-    const rect = row?.getBoundingClientRect();
-    const tab = selectedTab();
-    const tabRect = tab?.getBoundingClientRect();
+    const captured = snapshot || captureShelfMetrics();
+    const rect = captured.arrowRect;
+    const tabRect = captured.active?.getBoundingClientRect();
 
     if (!rect || !tabRect || rect.width <= 0) {
-      shelfProbe.classList.remove("visible");
+      setClassState(shelfProbe, "visible", false);
       return;
     }
 
-    shelfProbe.style.setProperty("--probe-left", `${rect.left}px`);
-    shelfProbe.style.setProperty("--probe-top", `${tabRect.top + 4}px`);
-    shelfProbe.style.setProperty("--probe-width", `${rect.width}px`);
-    shelfProbe.style.setProperty(
+    setPixelProperty(shelfProbe, "--probe-left", rect.left);
+    setPixelProperty(shelfProbe, "--probe-top", tabRect.top + 4);
+    setPixelProperty(shelfProbe, "--probe-width", rect.width);
+    setPixelProperty(
+      shelfProbe,
       "--probe-height",
-      `${Math.max(1, tabRect.height - 8)}px`
+      Math.max(1, tabRect.height - 8)
     );
     shelfProbe.classList.remove("continues-before", "continues-after");
-    shelfProbe.classList.toggle("address-mode", visible);
-    shelfProbe.classList.add("visible");
+    setClassState(shelfProbe, "address-mode", visible);
+    setClassState(shelfProbe, "visible", true);
   }
 
   function followShelfGeometryAnimation(duration = 210) {
@@ -1076,10 +1186,11 @@
 
     const tick = now => {
       if (token !== shelfProbeAnimationToken) return;
-      if (noScrollLayoutEnabled()) {
-        positionUrlbar();
-      }
-      positionShelfGeometryProbe();
+      const geometry = noScrollLayoutEnabled()
+        ? updateNoScrollLayout()
+        : null;
+      if (geometry) positionUrlbar(geometry);
+      positionShelfGeometryProbe(geometry?.snapshot);
 
       if (now - started < duration) {
         scheduler.scheduleFrame("shelf-follow", tick);
@@ -1102,16 +1213,16 @@
       if (newTabOpening) return;
 
       updateAllSafariDisplayLabels();
-      updatePlusPlacement();
-      positionUrlbar();
+      const geometry = updatePlusPlacement();
+      positionUrlbar(geometry);
       updateGlyph();
 
       /*
        * Fixed visual layers receive their own exact FLIP animation.
-       * Do not rewrite their viewport coordinates until that animation
-       * has completed.
+       * Address and shelf publication share the same captured transaction;
+       * do not recapture geometry between their commits.
        */
-      positionShelfGeometryProbe();
+      positionShelfGeometryProbe(geometry?.snapshot);
       followShelfGeometryAnimation();
       updateCleanGlyph();
 
@@ -1266,23 +1377,18 @@
     }
   }
 
+  /*
+   * Fixed controls are paint-time overlays, not owners of tab allocation.
+   * They intentionally sample the current transformed paint rect on demand so
+   * native drag and close animations remain Firefox-owned.
+   */
   function controlTargetRect() {
-    if (draggedControlTab) {
-      return draggedControlTab.querySelector(".tab-background")
-        ?.getBoundingClientRect() ||
-        draggedControlTab.getBoundingClientRect();
-    }
+    if (draggedControlTab) return tabPaintRect(draggedControlTab);
     if (tabCloseTarget && tabCloseTarget !== selectedTab()) {
-      return tabCloseTarget
-        .querySelector(".tab-background")
-        ?.getBoundingClientRect() || null;
+      return tabPaintRect(tabCloseTarget);
     }
-
     if (visible) return urlbar.getBoundingClientRect();
-
-    return tabCloseTarget
-      ?.querySelector(".tab-background")
-      ?.getBoundingClientRect() || null;
+    return tabPaintRect(tabCloseTarget);
   }
 
   function updateControlColor(tab = controlTargetTab()) {
@@ -1345,8 +1451,8 @@
       ? iconRect.top + iconRect.height / 2
       : rect.top + rect.height / 2;
 
-    closeButton.style.setProperty("--close-left", `${centerX - size / 2}px`);
-    closeButton.style.setProperty("--close-top", `${centerY - size / 2}px`);
+    setPixelProperty(closeButton, "--close-left", centerX - size / 2);
+    setPixelProperty(closeButton, "--close-top", centerY - size / 2);
 
     if (!visible && tabCloseTarget) {
       /*
@@ -1498,9 +1604,9 @@
         return;
       }
       // Root-level fixed controls do not inherit the row's paint clip.
-      // Use the same stationary shelf bounds for both control canvases.
-      const rect = owner.querySelector(".tab-background")
-        ?.getBoundingClientRect() || owner.getBoundingClientRect();
+      // This direct per-frame paint read follows Firefox's native transformed
+      // drag surface; it does not own or alter no-scroll allocation geometry.
+      const rect = tabPaintRect(owner);
       const shelf = row?.getBoundingClientRect();
       const clipControl = (control, left) => {
         const start = shelf ? Math.min(18, Math.max(0, shelf.left - left)) : 18;
@@ -1608,23 +1714,17 @@
     return draggedControlTab || tabCloseTarget || selectedTab();
   }
 
+  /*
+   * Reload is the trailing paint-time overlay counterpart to close. Its direct
+   * rect sample follows native transforms and never publishes shelf geometry.
+   */
   function reloadTargetRect() {
-    if (draggedControlTab) {
-      return draggedControlTab.querySelector(".tab-background")
-        ?.getBoundingClientRect() ||
-        draggedControlTab.getBoundingClientRect();
-    }
+    if (draggedControlTab) return tabPaintRect(draggedControlTab);
     if (tabCloseTarget && tabCloseTarget !== selectedTab()) {
-      return tabCloseTarget
-        .querySelector(".tab-background")
-        ?.getBoundingClientRect() || null;
+      return tabPaintRect(tabCloseTarget);
     }
-
     if (visible) return urlbar.getBoundingClientRect();
-
-    return tabCloseTarget
-      ?.querySelector(".tab-background")
-      ?.getBoundingClientRect() || null;
+    return tabPaintRect(tabCloseTarget);
   }
 
   function canReloadSelectedTab() {
@@ -1656,13 +1756,15 @@
     const size = 18;
     const centerX = rect.right - 23;
     const centerY = rect.top + rect.height / 2;
-    reloadButton.style.setProperty(
+    setPixelProperty(
+      reloadButton,
       "--reload-left",
-      `${centerX - size / 2}px`
+      centerX - size / 2
     );
-    reloadButton.style.setProperty(
+    setPixelProperty(
+      reloadButton,
       "--reload-top",
-      `${centerY - size / 2}px`
+      centerY - size / 2
     );
   }
 
@@ -2143,16 +2245,16 @@
     sharedOpeningGeometry = null;
     document.documentElement.classList.remove("safari-v8-opening-clock");
     if (noScrollLayoutEnabled() && !openedTab.pinned) {
-      const row = document.querySelector("#tabbrowser-arrowscrollbox");
-      const rect = row?.getBoundingClientRect();
+      const shelf = captureShelfMetrics();
+      const rect = shelf.arrowRect;
+      const available = Math.max(
+        0,
+        shelf.containerRect.width -
+          shelf.paddingLeft -
+          shelf.paddingRight -
+          shelf.pinnedWidth
+      );
       if (rect && rect.width > 0) {
-        const container = tabs.getBoundingClientRect();
-        const style = getComputedStyle(tabs);
-        const padding = (Number.parseFloat(style.paddingLeft) || 0) +
-          (Number.parseFloat(style.paddingRight) || 0);
-        const pinnedWidth = document.querySelector("#pinned-tabs-container")
-          ?.getBoundingClientRect().width || 0;
-        const available = Math.max(0, container.width - padding - pinnedWidth);
         sharedOpeningGeometry = {
           tab: openedTab, left: rect.left, width: rect.width, progress: 0,
           fullShelf: openingCount > 4 && available > 0 &&
@@ -2178,9 +2280,9 @@
     updateSafariDisplayLabel(openedTab);
     setVisible(true);
 
-
-    positionUrlbar();
-    positionShelfGeometryProbe();
+    const openingGeometry = updateNoScrollLayout();
+    positionUrlbar(openingGeometry);
+    positionShelfGeometryProbe(openingGeometry?.snapshot);
     applyGlyph(searchGlyph);
 
     // TabOpen precedes native selection and browser-load initialization.
