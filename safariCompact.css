@@ -2874,6 +2874,17 @@
   pointer-events: none !important;
 }
 
+/*
+ * The permanent 36px reload reservation belongs only to the custom fixed
+ * control. While typing, the native go button is an in-flow trailing child;
+ * retaining that reservation moves the arrow inward by the same amount.
+ */
+:root.safari-v8-no-scroll
+  #urlbar.safari-v8-moving.safari-v8-visible[usertyping]
+  > .urlbar-input-container {
+  padding-inline-end: 4px !important;
+}
+
 /* Mask every image source, including a possible native src attribute,
  * without collapsing the leading slot or shifting editable text.
  */
@@ -3316,6 +3327,21 @@
 :root.safari-v8-no-scroll
   #urlbar.safari-v8-moving.safari-v8-visible .urlbar-input {
   font-size: 13px !important;
+}
+
+/*
+ * The first tab predates Safari Compact's layout ownership. Its initial width
+ * allocation is state reconciliation, not a TabOpen transaction, so it must
+ * reach final geometry without replaying Firefox's native width transition.
+ */
+:root.safari-v8-no-scroll.safari-v8-initial-layout
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox,
+:root.safari-v8-no-scroll.safari-v8-initial-layout
+  #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:not([pinned]) {
+  transition: none !important;
 }
 
 /* One native flex-grow clock supplies row geometry during opening.

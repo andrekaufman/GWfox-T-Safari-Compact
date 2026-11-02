@@ -17,13 +17,35 @@
 
   if (!tabs || !urlbar || !input || !toolbar) return;
 
+  const shelfPaintHost = document.querySelector("#nav-bar");
+  const inputContainer = urlbar.querySelector(".urlbar-input-container");
+  const glyphSlot = document.querySelector("#trust-icon-container");
+  const glyph = document.querySelector("#trust-icon");
+
+  /*
+   * Validate every native prerequisite before taking ownership of DOM.
+   * A partial initialization therefore leaves no nodes or cleanup handle.
+   */
+  if (!shelfPaintHost || !inputContainer || !glyphSlot || !glyph) return;
+
+  let disposed = false;
+
+  const guardedFrame = callback => requestAnimationFrame(timestamp => {
+    if (!disposed) callback(timestamp);
+  });
+  const guardedTimeout = (callback, delay) => setTimeout(() => {
+    if (!disposed) callback();
+  }, delay);
+  const guardedMicrotask = callback => queueMicrotask(() => {
+    if (!disposed) callback();
+  });
+
   const closeButton = document.createElement("button");
   closeButton.id = "safari-v8-exact-close";
   closeButton.type = "button";
   closeButton.tabIndex = -1;
   closeButton.title = "Stäng flik";
   closeButton.setAttribute("aria-label", "Stäng flik");
-  document.documentElement.appendChild(closeButton);
 
   const reloadButton = document.createElement("button");
   reloadButton.id = "safari-v8-tab-reload";
@@ -31,25 +53,10 @@
   reloadButton.tabIndex = -1;
   reloadButton.title = "Ladda om sida";
   reloadButton.setAttribute("aria-label", "Ladda om sida");
-  document.documentElement.appendChild(reloadButton);
 
   const shelfProbe = document.createElement("div");
   shelfProbe.id = "safari-v8-shelf-geometry-probe";
   shelfProbe.setAttribute("aria-hidden", "true");
-
-  /*
-   * Keep the shelf below both address and native tab surfaces.
-   * TabsToolbar paints above nav-bar; placing the shelf inside TabsToolbar
-   * also tinted the address field underneath that toolbar.
-   * Fixed positioning retains the existing viewport geometry.
-   */
-  const shelfPaintHost = document.querySelector("#nav-bar");
-  if (!shelfPaintHost) {
-    closeButton.remove();
-    reloadButton.remove();
-    return;
-  }
-  shelfPaintHost.prepend(shelfProbe);
 
   /*
    * External compositing surface. This is the only tested paint position
@@ -58,11 +65,6 @@
   const addressSurface = document.createElement("div");
   addressSurface.id = "safari-v8-address-surface";
   addressSurface.setAttribute("aria-hidden", "true");
-  document.documentElement.appendChild(addressSurface);
-
-  const inputContainer = urlbar.querySelector(".urlbar-input-container");
-  const glyphSlot = document.querySelector("#trust-icon-container");
-  const glyph = document.querySelector("#trust-icon");
 
   /*
    * The external Soft Light surface corrects the address material, but it
@@ -72,12 +74,18 @@
   const cleanGlyph = document.createElement("div");
   cleanGlyph.id = "safari-v8-clean-glyph";
   cleanGlyph.setAttribute("aria-hidden", "true");
-  document.documentElement.appendChild(cleanGlyph);
 
-  if (!inputContainer || !glyphSlot || !glyph) {
-    closeButton.remove();
-    return;
-  }
+  document.documentElement.appendChild(closeButton);
+  document.documentElement.appendChild(reloadButton);
+  /*
+   * Keep the shelf below both address and native tab surfaces.
+   * TabsToolbar paints above nav-bar; placing the shelf inside TabsToolbar
+   * also tinted the address field underneath that toolbar.
+   * Fixed positioning retains the existing viewport geometry.
+   */
+  shelfPaintHost.prepend(shelfProbe);
+  document.documentElement.appendChild(addressSurface);
+  document.documentElement.appendChild(cleanGlyph);
 
   let visible = false;
   let closeHover = false;
@@ -191,6 +199,7 @@
   }
 
   function onSafariTabAttrModified(event) {
+    if (disposed) return;
     updateSafariDisplayLabel(event.target);
   }
 
@@ -333,6 +342,7 @@
   }
 
   function animateNavigationShiftIfNeeded() {
+    if (disposed) return;
     // Use one geometry owner for every back/forward state combination.
     // Retire any legacy transaction before it can repaint the shelf.
     if (noScrollLayoutEnabled()) {
@@ -556,14 +566,14 @@
 
         if (boundedProgress < 1) {
           navigationShiftGeometryFrame =
-            requestAnimationFrame(tickShelf);
+            guardedFrame(tickShelf);
         } else {
           navigationShiftGeometryFrame = 0;
         }
       };
 
       navigationShiftGeometryFrame =
-        requestAnimationFrame(tickShelf);
+        guardedFrame(tickShelf);
     }
 
     const currentTargets =
@@ -664,6 +674,7 @@
         animation.finished.catch(() => null)
       )
     ).then(() => {
+      if (disposed) return;
       if (
         navigationShiftAnimations !== animations
       ) {
@@ -699,7 +710,7 @@
      * the close-hover state and its mask have been removed.
      */
     if (visible) {
-      queueMicrotask(updateGlyph);
+      guardedMicrotask(updateGlyph);
     }
   }
 
@@ -709,6 +720,7 @@
   }
 
   function setVisible(state) {
+    if (disposed) return;
     visible = state;
     document.documentElement.classList.toggle("safari-v8-address-active", state);
     urlbar.classList.toggle("safari-v8-visible", state);
@@ -753,6 +765,7 @@
     );
     contentHandoffAnimations.push(animation);
     animation.finished.catch(() => null).then(() => {
+      if (disposed) return;
       contentHandoffAnimations =
         contentHandoffAnimations.filter(item => item !== animation);
     });
@@ -989,6 +1002,7 @@
       iconLabelReveals.set(tab, animations);
       Promise.allSettled(animations.map(animation => animation.finished))
         .then(() => {
+          if (disposed) return;
           // A superseded animation must not remove its replacement.
           if (iconLabelReveals.get(tab) === animations) {
             iconLabelReveals.delete(tab);
@@ -1032,6 +1046,7 @@
   }
 
   function updateNoScrollLayout() {
+    if (disposed) return;
     // display:none can remove navigation space without a width transition.
     // Follow that state change directly as well as animated reservations.
     const back = document.querySelector("#back-button");
@@ -1269,6 +1284,7 @@
   }
 
   function positionUrlbar() {
+    if (disposed) return;
     if (noScrollLayoutEnabled()) {
       positionNoScrollAddress();
       return;
@@ -1380,6 +1396,7 @@
   }
 
   function updatePlusPlacement(animate = false) {
+    if (disposed) return;
     if (noScrollLayoutEnabled()) {
       updateNoScrollLayout();
       return;
@@ -1471,6 +1488,7 @@
     plusPlacementAnimation.finished
       .catch(() => null)
       .then(() => {
+        if (disposed) return;
         plusPlacementAnimation = null;
       });
   }
@@ -1488,6 +1506,7 @@
   }
 
   function safeExpansion(plus, active) {
+    if (disposed) return;
     if (tabs.hasAttribute("overflow")) {
       const scrollport = tabScrollportRect();
       const activeRect = active?.getBoundingClientRect();
@@ -1537,6 +1556,7 @@
   }
 
   function applyPush(openingProgress = null) {
+    if (disposed) return;
     if (noScrollLayoutEnabled()) {
       updateNoScrollLayout();
       urlbar.style.setProperty("--safari-v8-expand", "0px");
@@ -1776,6 +1796,7 @@
   }
 
   function updateCleanGlyph() {
+    if (disposed) return;
     /*
      * The former external blend surface is disabled, so a second copied glyph
      * is no longer needed. Animate Firefox's real glyph directly. One painted
@@ -1818,6 +1839,7 @@
     glyphHandoffAnimation.finished
       .catch(() => null)
       .then(() => {
+        if (disposed) return;
         glyphHandoffAnimation = null;
       });
   }
@@ -1829,24 +1851,26 @@
   }
 
   function onAddressInput() {
+    if (disposed) return;
     // Input may precede Firefox's usertyping attribute update.
     hideReload();
     updateGlyph();
   }
 
   function updateGlyph() {
+    if (disposed) return;
     cancelAnimationFrame(glyphFrame);
     if (!visible || !urlbar.classList.contains("safari-v8-visible")) return;
 
     applyGlyph(resolveGlyph());
 
-    queueMicrotask(() => {
+    guardedMicrotask(() => {
       if (!visible) return;
       applyGlyph(resolveGlyph());
       updateCleanGlyph();
     });
 
-    glyphFrame = requestAnimationFrame(() => {
+    glyphFrame = guardedFrame(() => {
       if (!visible) return;
       applyGlyph(resolveGlyph());
       updateCleanGlyph();
@@ -1855,6 +1879,7 @@
   }
 
   function positionShelfGeometryProbe() {
+    if (disposed) return;
     if (noScrollLayoutEnabled()) {
       const row = document.querySelector("#tabbrowser-arrowscrollbox");
       const rect = row?.getBoundingClientRect();
@@ -2034,6 +2059,7 @@
   }
 
   function followShelfGeometryAnimation(duration = 210) {
+    if (disposed) return;
     const token = ++shelfProbeAnimationToken;
     const started = performance.now();
     cancelAnimationFrame(shelfProbeAnimationFrame);
@@ -2047,17 +2073,18 @@
       positionShelfGeometryProbe();
 
       if (now - started < duration) {
-        shelfProbeAnimationFrame = requestAnimationFrame(tick);
+        shelfProbeAnimationFrame = guardedFrame(tick);
       } else {
         shelfProbeAnimationFrame = 0;
         positionShelfGeometryProbe();
       }
     };
 
-    shelfProbeAnimationFrame = requestAnimationFrame(tick);
+    shelfProbeAnimationFrame = guardedFrame(tick);
   }
 
   function positionAddressSurface() {
+    if (disposed) return;
     if (!visible) {
       addressSurface.classList.remove("visible");
       return;
@@ -2091,8 +2118,9 @@
   }
 
   function render() {
+    if (disposed) return;
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
+    frame = guardedFrame(() => {
       /*
        * Firefox owns the complete native new-tab flex animation. Rendering the
        * address transaction from ResizeObserver or focus events during that
@@ -2130,23 +2158,26 @@
   }
 
   function settle() {
+    if (disposed) return;
     clearTimeout(settleTimer);
     render();
-    settleTimer = setTimeout(render, 120);
+    settleTimer = guardedTimeout(render, 120);
   }
 
   function revealSelectedAddressFromStart() {
+    if (disposed) return;
     input.scrollLeft = 0;
 
-    requestAnimationFrame(() => {
+    guardedFrame(() => {
       input.scrollLeft = 0;
-      setTimeout(() => {
+      guardedTimeout(() => {
         input.scrollLeft = 0;
       }, 0);
     });
   }
 
   function openUrlbar() {
+    if (disposed) return;
     const tab = selectedTab();
     if (!tab) return;
 
@@ -2214,7 +2245,7 @@
       );
     }
 
-    requestAnimationFrame(() => {
+    guardedFrame(() => {
       if (noScrollLayoutEnabled() && (
         !visible || addressOwner !== tab ||
         selectedTab() !== tab || tab.closing || tab.hidden
@@ -2227,7 +2258,24 @@
     });
   }
 
+  function retireAddressPresentation() {
+    visible = false;
+    addressOwner = null;
+    pendingGlyphHandoffRect = null;
+    document.documentElement.classList.remove(
+      "safari-v8-address-active", "safari-v8-opening-reserve"
+    );
+    urlbar.classList.remove(
+      "safari-v8-visible", "safari-v8-newtab-enter",
+      "safari-v8-exact-close-hover"
+    );
+    addressSurface.classList.remove("visible");
+    cleanGlyph.classList.remove("visible");
+    glyphSlot.classList.remove("safari-v8-close-mask");
+  }
+
   function closeUrlbar() {
+    if (disposed) return;
     document.documentElement.classList.remove(
       "safari-v8-opening-reserve"
     );
@@ -2265,7 +2313,7 @@
       tab.classList.remove("safari-v8-content-return");
       void tab.getBoundingClientRect();
       tab.classList.add("safari-v8-content-return");
-      setTimeout(() => tab.classList.remove("safari-v8-content-return"), 140);
+      guardedTimeout(() => tab.classList.remove("safari-v8-content-return"), 140);
     }
   }
 
@@ -2485,6 +2533,7 @@
   }
 
   function startDraggedControls(event) {
+    if (disposed) return;
     const tab = event.target.closest?.(".tabbrowser-tab");
     if (!noScrollLayoutEnabled() || !tab ||
         tab.hidden || tab.closing) return;
@@ -2543,14 +2592,15 @@
           hideReload();
         }
       }
-      draggedControlFrame = requestAnimationFrame(follow);
+      draggedControlFrame = guardedFrame(follow);
     };
-    draggedControlFrame = requestAnimationFrame(follow);
+    draggedControlFrame = guardedFrame(follow);
   }
 
   // Native reordering only receives dragover while the pointer targets tabs.
   // Extend below the shelf by three row heights; distant detach stays native.
   function forwardShelfDrag(event) {
+    if (disposed) return;
     if (!noScrollLayoutEnabled() || !draggedControlTab ||
         draggedControlEnding || tabs.verticalMode || tabs._isCustomizing ||
         draggedControlTab.pinned || draggedControlTab.hidden ||
@@ -2690,6 +2740,7 @@
   }
 
   function suppressControlsDuringScroll() {
+    if (disposed) return;
     controlsSuppressedByScroll = true;
     clearTimeout(scrollControlTimer);
     hideClose();
@@ -2697,13 +2748,14 @@
     tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
     tabCloseTarget = null;
 
-    scrollControlTimer = setTimeout(() => {
+    scrollControlTimer = guardedTimeout(() => {
       controlsSuppressedByScroll = false;
       scrollControlTimer = 0;
     }, 120);
   }
 
   function forwardTabScrollWheel(event) {
+    if (disposed) return;
     if (noScrollLayoutEnabled()) return;
     // Forward once, and only while the horizontal tab strip can scroll.
     if (event.defaultPrevented || !tabs.hasAttribute("overflow")) return;
@@ -2768,6 +2820,7 @@
   }
 
   function onTabStripScroll() {
+    if (disposed) return;
     /*
      * Scroll-induced hit testing can emit pointermove without real pointer
      * motion. Keep controls suppressed until scrolling has been idle briefly.
@@ -2833,13 +2886,14 @@
   }
 
   function ensureSelectedTabVisible() {
+    if (disposed) return;
     cancelAnimationFrame(selectedTabScrollFrame);
 
-    selectedTabScrollFrame = requestAnimationFrame(() => {
+    selectedTabScrollFrame = guardedFrame(() => {
       selectedTabScrollFrame = 0;
       scrollSelectedTabIntoView();
 
-      selectedTabScrollFrame = requestAnimationFrame(() => {
+      selectedTabScrollFrame = guardedFrame(() => {
         selectedTabScrollFrame = 0;
         positionFinalNavigationGeometry();
       });
@@ -2847,6 +2901,7 @@
   }
 
   function onPointerMove(event) {
+    if (disposed) return;
     // Drag ownership must not follow tabs crossed by the pointer.
     if (draggedControlTab) return;
     if (controlsSuppressedByScroll) {
@@ -3049,6 +3104,7 @@
   }
 
   function onTabSelect() {
+    if (disposed) return;
     if (noScrollLayoutEnabled()) {
       cancelContentHandoff();
       const opening = sharedOpeningGeometry;
@@ -3088,7 +3144,7 @@
      */
     animateNavigationShiftIfNeeded();
 
-    queueMicrotask(() => {
+    guardedMicrotask(() => {
       if (newTabOpening) return;
       // TabSelect may finish after TabOpen's address ownership transaction.
       // Do not retire the new tab's already focused address surface.
@@ -3104,6 +3160,7 @@
   }
 
   function onFocusIn(event) {
+    if (disposed) return;
     if (
       newTabOpening ||
       (event.target !== input && !urlbar.contains(event.target))
@@ -3118,7 +3175,8 @@
   }
 
   function onFocusOut() {
-    requestAnimationFrame(() => {
+    if (disposed) return;
+    guardedFrame(() => {
       if (newTabOpening) return;
 
       const focused = document.activeElement;
@@ -3137,6 +3195,7 @@
   }
 
   function finishStableNewTab(openedTab, token) {
+    if (disposed) return;
     if (
       token !== newTabGeometryToken ||
       openedTab !== gBrowser.selectedTab ||
@@ -3192,6 +3251,7 @@
   }
 
   function waitForStableNewTabGeometry(openedTab, token) {
+    if (disposed) return;
     cancelAnimationFrame(newTabGeometryFrame);
     if (noScrollLayoutEnabled()) {
       const sample = () => {
@@ -3231,9 +3291,9 @@
           finishStableNewTab(openedTab, token);
           return;
         }
-        newTabGeometryFrame = requestAnimationFrame(sample);
+        newTabGeometryFrame = guardedFrame(sample);
       };
-      newTabGeometryFrame = requestAnimationFrame(sample);
+      newTabGeometryFrame = guardedFrame(sample);
       return;
     }
 
@@ -3359,10 +3419,10 @@
         return;
       }
 
-      newTabGeometryFrame = requestAnimationFrame(sample);
+      newTabGeometryFrame = guardedFrame(sample);
     };
 
-    newTabGeometryFrame = requestAnimationFrame(sample);
+    newTabGeometryFrame = guardedFrame(sample);
   }
 
 
@@ -3371,6 +3431,7 @@
   // second Cmd+T can consume prepared content. Native policy/counts still
   // decide whether a preload may be created.
   function replenishNewTabPreload(openedTab) {
+    if (disposed) return;
     if (!noScrollLayoutEnabled() || !openedTab?.isConnected ||
         openedTab.closing || !openedTab.linkedPanel ||
         gBrowser.preloadedBrowser || window.closed) return;
@@ -3385,6 +3446,22 @@
   }
 
   function onTabOpen(event) {
+    if (disposed) return;
+
+    /*
+     * Tabs created during Firefox's delayed startup/session restoration already
+     * belong to the initial window state. Reconcile their final geometry without
+     * presenting them as interactive new-tab openings.
+     */
+    if (!gBrowserInit.delayedStartupFinished) {
+      guardedMicrotask(() => {
+        updateNoScrollLayout();
+        updateAllSafariDisplayLabels();
+        settle();
+      });
+      return;
+    }
+
     clearIconLabelReveals();
     clearClosingCapsulePaints();
     // Capture painted content before retiring a superseded opening.
@@ -3412,7 +3489,7 @@
     const openedTab = event.target;
     // TabOpen precedes native load/selection initialization. Do not create
     // another browser reentrantly inside that unfinished transaction.
-    queueMicrotask(() => replenishNewTabPreload(openedTab));
+    guardedMicrotask(() => replenishNewTabPreload(openedTab));
     const token = ++newTabGeometryToken;
     clearOpeningContentOcclusion();
     sharedOpeningGeometry = null;
@@ -3471,7 +3548,7 @@
     // TabOpen precedes native selection and browser-load initialization.
     // Focus only after that transaction, never on the previous tab or on
     // behalf of an opening superseded by another rapid Cmd+T.
-    queueMicrotask(() => {
+    guardedMicrotask(() => {
       if (
         token !== newTabGeometryToken ||
         openedTab !== selectedTab()
@@ -3481,7 +3558,7 @@
       revealSelectedAddressFromStart();
     });
 
-    queueMicrotask(animateNavigationShiftIfNeeded);
+    guardedMicrotask(animateNavigationShiftIfNeeded);
     waitForStableNewTabGeometry(openedTab, token);
   }
 
@@ -3493,6 +3570,7 @@
   }
 
   function preserveClosingCapsule(tab) {
+    if (disposed) return;
     const ordinary = [...gBrowser.tabs].filter(
       item => !item.hidden && !item.closing && !item.pinned
     );
@@ -3566,15 +3644,15 @@
     document.documentElement.appendChild(host);
 
     let frameId = 0;
-    let disposed = false;
+    let paintDisposed = false;
     const fade = host.animate(
       [{opacity: 1}, {opacity: .85, offset: .35}, {opacity: 0}],
       {duration: 300, easing: "ease-in-out", fill: "forwards"}
     );
     const paint = {
       dispose() {
-        if (disposed) return;
-        disposed = true;
+        if (paintDisposed) return;
+        paintDisposed = true;
         cancelAnimationFrame(frameId);
         fade.cancel();
         host.remove();
@@ -3583,7 +3661,7 @@
     };
     closingCapsulePaints.add(paint);
     const follow = () => {
-      if (disposed) return;
+      if (disposed || paintDisposed) return;
       if (!tab.isConnected) {
         paint.dispose();
         return;
@@ -3595,13 +3673,14 @@
       host.style.setProperty("top",
         `${rect.top + current.top - tabRect.top}px`, "important");
       host.style.setProperty("width", `${rect.width * ratio}px`, "important");
-      frameId = requestAnimationFrame(follow);
+      frameId = guardedFrame(follow);
     };
-    frameId = requestAnimationFrame(follow);
+    frameId = guardedFrame(follow);
     fade.finished.then(() => paint.dispose(), () => paint.dispose());
   }
 
   function onTabClose(event) {
+    if (disposed) return;
     if (!noScrollLayoutEnabled()) return;
     cancelIconLabelReveal(event.target);
     preserveClosingCapsule(event.target);
@@ -3629,7 +3708,7 @@
     }
     // TabClose precedes the native closing flag on some Firefox versions.
     // Defer allocation to the event's completed native state, not a timer.
-    queueMicrotask(() => {
+    guardedMicrotask(() => {
       updateNoScrollLayout();
       positionUrlbar();
       positionAddressSurface();
@@ -3706,7 +3785,10 @@
   resizeObserver = new ResizeObserver(render);
   resizeObserver.observe(toolbar);
 
-  window.__safariCompactCleanup = () => {
+  const cleanup = () => {
+    if (disposed) return;
+    disposed = true;
+
     clearIconLabelReveals();
     stopDraggedControls();
     tabs.removeEventListener("dragstart", startDraggedControls, true);
@@ -3809,14 +3891,16 @@
     closeButton.removeEventListener("pointerdown", blockClosePress, true);
     closeButton.removeEventListener("mousedown", blockClosePress, true);
     closeButton.removeEventListener("click", closeSelectedTab, true);
-    urlbar.removeEventListener("wheel", forwardTabScrollWheel, true);
+    urlbar.removeEventListener("wheel", forwardTabScrollWheel, {
+      capture: true
+    });
     urlbar.classList.remove("safari-v8-outside-scrollport");
     closeButton.removeEventListener("wheel", forwardTabScrollWheel);
     reloadButton.removeEventListener("pointerdown", blockReloadPress, true);
     reloadButton.removeEventListener("mousedown", blockReloadPress, true);
     reloadButton.removeEventListener("click", reloadSelectedTab, true);
     reloadButton.removeEventListener("wheel", forwardTabScrollWheel);
-    closeUrlbar();
+    retireAddressPresentation();
     clearAddressState();
     tabs.querySelectorAll(
       ".safari-v8-clipped-start, .safari-v8-clipped-end, .safari-v8-compact-tab"
@@ -3848,8 +3932,11 @@
     closeButton.remove();
     reloadButton.remove();
     shelfProbe.remove();
-    delete window.__safariCompactCleanup;
+    if (window.__safariCompactCleanup === cleanup) {
+      delete window.__safariCompactCleanup;
+    }
   };
+  window.__safariCompactCleanup = cleanup;
 
   clearPush();
   tabs.style.removeProperty("--safari-v8-trailing-reserve");
@@ -3863,8 +3950,17 @@
     button.style.removeProperty("--safari-v8-detached-left");
     button.style.removeProperty("--safari-v8-detached-top");
   }
-  document.documentElement.classList.add("safari-v8-no-scroll");
+  /*
+   * The initial tab already exists when this script takes over its layout.
+   * Apply the first no-scroll allocation with transitions suppressed, flush
+   * that final geometry, then restore normal transitions for later TabOpen.
+   */
+  document.documentElement.classList.add(
+    "safari-v8-no-scroll", "safari-v8-initial-layout"
+  );
   updateNoScrollLayout();
   updateAllSafariDisplayLabels();
+  void tabs.getBoundingClientRect();
+  document.documentElement.classList.remove("safari-v8-initial-layout");
   settle();
 })();
