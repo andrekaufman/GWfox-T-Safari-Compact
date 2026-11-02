@@ -75,6 +75,8 @@
   let glyphObserver = null;
   let newTabFocusTimer = 0;
   let newTabOpening = false;
+  let restoreTabCommandPending = false;
+  let restoreTabCommandTimer = 0;
   let newTabGeometryFrame = 0;
   let newTabGeometryToken = 0;
   let sharedOpeningGeometry = null;
@@ -3117,6 +3119,22 @@
   }
 
   function onKeyDown(event) {
+    if (
+      event.metaKey &&
+      event.shiftKey &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      event.key.toLowerCase() === "t"
+    ) {
+      restoreTabCommandPending = true;
+      clearTimeout(restoreTabCommandTimer);
+      restoreTabCommandTimer = guardedTimeout(() => {
+        restoreTabCommandTimer = 0;
+        restoreTabCommandPending = false;
+      }, 1000);
+      return;
+    }
+
     if (event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "l") {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -3374,14 +3392,23 @@
   function onTabOpen(event) {
     if (disposed) return;
 
+    const openedTab = event.target;
+    const restoringClosedTab = restoreTabCommandPending;
+    clearTimeout(restoreTabCommandTimer);
+    restoreTabCommandTimer = 0;
+    restoreTabCommandPending = false;
+
     /*
-     * Tabs created during Firefox's delayed startup/session restoration already
-     * belong to the initial window state. Reconcile their final geometry without
-     * presenting them as interactive new-tab openings.
+     * Startup tabs and tabs restored by Cmd+Shift+T are state reconciliation,
+     * not interactive new-tab transactions. Firefox commits restored identity
+     * state after TabOpen, so address ownership and glyph seeding must not start.
      */
-    if (!gBrowserInit.delayedStartupFinished) {
+    if (!gBrowserInit.delayedStartupFinished || restoringClosedTab) {
+      retireAddressPresentation();
       guardedMicrotask(() => {
+        if (!openedTab.isConnected || openedTab.closing) return;
         updateNoScrollLayout();
+        updateSafariDisplayLabel(openedTab);
         updateAllSafariDisplayLabels();
         settle();
       });
@@ -3412,7 +3439,6 @@
     clearTimeout(newTabFocusTimer);
     cancelAnimationFrame(newTabGeometryFrame);
 
-    const openedTab = event.target;
     // TabOpen precedes native load/selection initialization. Do not create
     // another browser reentrantly inside that unfinished transaction.
     guardedMicrotask(() => replenishNewTabPreload(openedTab));
@@ -3781,6 +3807,9 @@
     shelfProbeAnimationToken += 1;
     cancelAnimationFrame(shelfProbeAnimationFrame);
     newTabOpening = false;
+    clearTimeout(restoreTabCommandTimer);
+    restoreTabCommandTimer = 0;
+    restoreTabCommandPending = false;
     resizeObserver?.disconnect();
     glyphObserver?.disconnect();
     hideCleanGlyph();
