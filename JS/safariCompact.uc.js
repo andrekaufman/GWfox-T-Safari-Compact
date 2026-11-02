@@ -343,8 +343,8 @@
 
   function animateNavigationShiftIfNeeded() {
     if (disposed) return;
-    // Use one geometry owner for every back/forward state combination.
-    // Retire any legacy transaction before it can repaint the shelf.
+    // Navigation geometry has one owner so superseded motion cannot repaint
+    // the shelf.
     if (noScrollLayoutEnabled()) {
       navigationShiftSnapshot = null;
       cancelNavigationShiftAnimations();
@@ -384,9 +384,6 @@
     cancelAnimationFrame(shelfProbeAnimationFrame);
     shelfProbeAnimationFrame = 0;
 
-    /*
-     * First establish the exact final logical geometry.
-     */
     positionFinalNavigationGeometry();
 
     /*
@@ -1798,9 +1795,8 @@
   function updateCleanGlyph() {
     if (disposed) return;
     /*
-     * The former external blend surface is disabled, so a second copied glyph
-     * is no longer needed. Animate Firefox's real glyph directly. One painted
-     * element means no destination shadow and no duplicate search glass.
+     * Firefox's native glyph is the sole painted glyph. Animating it directly
+     * prevents duplicate search artwork and destination shadows.
      */
     cleanGlyph.classList.remove("visible");
     glyph.style.removeProperty("opacity");
@@ -2293,7 +2289,7 @@
     followShelfGeometryAnimation();
 
     if (noScrollLayoutEnabled() && wasVisible && tab) {
-      // Never transfer the previous address's motion to another tab.
+      // Address motion belongs only to its owning tab.
       if (previousAddressOwner !== tab || tab.closing || tab.hidden) {
         return;
       }
@@ -3110,8 +3106,8 @@
       const opening = sharedOpeningGeometry;
       if (newTabOpening && opening) {
         if (opening.tab === selectedTab()) {
-          // TabOpen may have painted while the previous tab was selected.
-          // Transfer ownership at native selection, not at animation finish.
+          // TabOpen can paint before Firefox commits selection. Transfer ownership
+          // at selection rather than at animation completion.
           if (visible && addressOwner !== opening.tab) setVisible(true);
         } else {
           // A real selection away retires the transaction synchronously.
@@ -3222,7 +3218,6 @@
     }
     updatePlusPlacement(true);
     positionUrlbar();
-    /* Establish the compact start before committing synchronized growth. */
     urlbar.classList.add("safari-v8-newtab-enter");
     void urlbar.getBoundingClientRect();
     applyPush();
@@ -3233,7 +3228,7 @@
     positionUrlbar();
     positionAddressSurface();
     positionShelfGeometryProbe();
-    // Flush the final shared geometry before restoring ordinary transitions.
+    // Commit shared geometry before ordinary transitions resume.
     if (document.documentElement.classList.contains("safari-v8-shared-opening")) {
       void urlbar.getBoundingClientRect();
       document.documentElement.classList.remove("safari-v8-shared-opening");
@@ -3389,8 +3384,8 @@
        * already reached its final painted width. Do not wait for that
        * invisible tail: after fadein and observed motion, one unchanged
        * whole-row sample can hand off to synchronized address expansion.
-       * Keep native completion for motionless openings and the legacy
-       * fallback for versions without the native API.
+       * Native completion still owns motionless openings; versions without
+       * that API use the geometry-stability fallback.
        */
       const hasNativeCompletion =
         typeof tabs.openAnimationFinished === "function";
@@ -3476,8 +3471,8 @@
           element, left: element.getBoundingClientRect().left
         }))
       : null;
-    // A new tab must not inherit the previous tab's hover ownership
-    // or fixed control coordinates while opening geometry is changing.
+    // Hover ownership and fixed control coordinates cannot cross a TabOpen
+    // transaction while geometry is changing.
     hideClose();
     hideReload();
     tabCloseTarget = null;
@@ -3546,8 +3541,8 @@
     applyGlyph(searchGlyph);
 
     // TabOpen precedes native selection and browser-load initialization.
-    // Focus only after that transaction, never on the previous tab or on
-    // behalf of an opening superseded by another rapid Cmd+T.
+    // Focus only after the transaction identifies the still-current
+    // opening tab.
     guardedMicrotask(() => {
       if (
         token !== newTabGeometryToken ||

@@ -503,7 +503,6 @@
 }
 
 
-/* ===== SAFARI EXISTING TAB MATERIAL TEST START ===== */
 
 :root {
   --safari-v8-inactive-tab:
@@ -603,9 +602,7 @@
     );
 }
 
-/* ===== SAFARI EXISTING TAB MATERIAL TEST END ===== */
 
-/* ===== SAFARI TAB CONTENT CENTER TEST START ===== */
 
 /*
  * Centre favicon + visible title as one natural-width group.
@@ -719,9 +716,7 @@
   margin: 0 !important;
 }
 
-/* ===== SAFARI TAB CONTENT CENTER TEST END ===== */
 
-/* ===== SAFARI TAB HOVER GLYPH FIX START ===== */
 
 /*
  * One stable 16 px glyph slot.
@@ -897,9 +892,7 @@
   }
 }
 
-/* ===== SAFARI TAB HOVER GLYPH FIX END ===== */
 
-/* ===== SAFARI EIGHT-SPOKE BUSY INDICATOR START ===== */
 
 /*
  * Apple-like activity indicator:
@@ -979,14 +972,10 @@
   }
 }
 
-/* ===== SAFARI EIGHT-SPOKE BUSY INDICATOR END ===== */
 
 /*
- * Final Safari-style connected tab shelf.
- *
- * Geometry is supplied by the verified frame-following probe logic.
- * This layer is decorative only and sits behind Firefox's real tabs,
- * URL overlay, controls and hit targets.
+ * Geometry comes from the frame-following probe. This decorative shelf
+ * remains behind Firefox's tabs, address overlay, controls, and hit targets.
  */
 #safari-v8-shelf-geometry-probe {
   position: fixed !important;
@@ -1059,7 +1048,6 @@
   ) !important;
 }
 
-/* ===== SAFARI SHELF STACKING AND FOREGROUND POLISH START ===== */
 
 /*
  * The shelf now lives inside #tabbrowser-tabs. Real tabs are always
@@ -1122,9 +1110,7 @@
   mix-blend-mode: normal !important;
 }
 
-/* ===== SAFARI SHELF STACKING AND FOREGROUND POLISH END ===== */
 
-/* ===== SAFARI FINAL TAB POLISH START ===== */
 
 /* Shelf and real tabs share one stacking context. */
 #safari-v8-shelf-geometry-probe {
@@ -1185,10 +1171,8 @@
   mix-blend-mode: normal !important;
 }
 
-/* ===== SAFARI FINAL TAB POLISH END ===== */
 
 
-/* ===== SAFARI URL FOCUS RING SUPPRESSION START ===== */
 
 /*
  * Firefox paints a 3.5 px blue focus outline around the complete URL
@@ -1212,9 +1196,7 @@
     !important;
 }
 
-/* ===== SAFARI URL FOCUS RING SUPPRESSION END ===== */
 
-/* ===== SAFARI CONSOLIDATED HOVER CONTROLS START ===== */
 #safari-v8-exact-close,
 #safari-v8-tab-reload {
   width: 18px !important;
@@ -1248,9 +1230,7 @@
 #safari-v8-tab-reload.visible:active {
   transform: scale(.9) !important;
 }
-/* ===== SAFARI CONSOLIDATED HOVER CONTROLS END ===== */
 
-/* ===== SAFARI HOVER CONTROL FINALIZATION START ===== */
 
 /* Hide only the glyph that physically overlaps the measured close control. */
 #tabbrowser-tabs[orient="horizontal"]
@@ -1277,9 +1257,7 @@
   transform: none !important;
 }
 
-/* ===== SAFARI HOVER CONTROL FINALIZATION END ===== */
 
-/* ===== SAFARI DOMAIN LABELS AND FAST HOVER EXIT START ===== */
 
 /*
  * Keep Firefox's real title untouched for previews/tooltips. Only the
@@ -1351,9 +1329,7 @@
     !important;
 }
 
-/* ===== SAFARI DOMAIN LABELS AND FAST HOVER EXIT END ===== */
 
-/* ===== SAFARI ADDRESS MODE POLISH START ===== */
 
 /*
  * Firefox exposes the painted address surface as .urlbar-background.
@@ -1377,9 +1353,7 @@
   outline-offset: 0 !important;
 }
 
-/* ===== SAFARI ADDRESS MODE POLISH END ===== */
 
-/* ===== SAFARI ADDRESS LAYOUT FINAL START ===== */
 
 /*
  * The outer URL box and shelf keep their proven 36 px geometry. Only the
@@ -1426,9 +1400,7 @@
   visibility: hidden !important;
 }
 
-/* ===== SAFARI ADDRESS LAYOUT FINAL END ===== */
 
-/* ===== SAFARI ADDRESS STATE CONSOLIDATION START ===== */
 
 /* The outer shelf remains grey; the actual editable foreground is white. */
 #urlbar.safari-v8-moving.safari-v8-visible > .urlbar-background {
@@ -1478,9 +1450,7 @@
   transition: background-color 70ms ease-out !important;
 }
 
-/* ===== SAFARI ADDRESS STATE CONSOLIDATION END ===== */
 
-/* ===== SAFARI NEWTAB TRANSACTION AND GLYPH MASK START ===== */
 
 /*
  * Close and the leading glyph intentionally share one slot in address mode.
@@ -1504,9 +1474,7 @@
   visibility: hidden !important;
 }
 
-/* ===== SAFARI NEWTAB TRANSACTION AND GLYPH MASK END ===== */
 
-/* ===== SAFARI PAGE ACTION REPLACEMENT ONLY START ===== */
 /* The custom reload control exclusively owns the trailing address slot. */
 #urlbar.safari-v8-moving.safari-v8-visible
   :is(#page-action-buttons, #star-button-box, #star-button) {
@@ -1515,9 +1483,7 @@
   pointer-events: none !important;
   transition: none !important;
 }
-/* ===== SAFARI PAGE ACTION REPLACEMENT ONLY END ===== */
 
-/* ===== SAFARI URL HIT TESTING FIX START ===== */
 
 /*
  * Runtime hit-testing showed the selected .tabbrowser-tab above #urlbar.
@@ -1546,9 +1512,7 @@
   z-index: 2147483647 !important;
 }
 
-/* ===== SAFARI URL HIT TESTING FIX END ===== */
 
-/* ===== SAFARI URL POINTER PLANE FIX START ===== */
 
 /*
  * #TabsToolbar is a separate stacking context above #urlbar's ancestor.
@@ -1595,9 +1559,7 @@
   cursor: default !important;
 }
 
-/* ===== SAFARI URL POINTER PLANE FIX END ===== */
 
-/* ===== SAFARI EXTERNAL ADDRESS COMPOSITE START ===== */
 /*
  * External compositing surface at the proven paint position.
  *
@@ -1681,9 +1643,7 @@
   text-align: center !important;
 }
 
-/* ===== SAFARI EXTERNAL ADDRESS COMPOSITE END ===== */
 
-/* ===== SAFARI CLEAN GLYPH ABOVE COMPOSITE START ===== */
 
 /*
  * The Soft Light address surface alters favicon colours. This fixed copy
@@ -1733,9 +1693,7 @@
   visibility: hidden !important;
 }
 
-/* ===== SAFARI CLEAN GLYPH ABOVE COMPOSITE END ===== */
 
-/* ===== SAFARI NAVIGATION SHIFT EXCLUSIVE MOTION START ===== */
 
 /*
  * During the measured navigation-history reflow, WAAPI and the JavaScript
@@ -1765,9 +1723,7 @@
   will-change: left, top, width, height !important;
 }
 
-/* ===== SAFARI NAVIGATION SHIFT EXCLUSIVE MOTION END ===== */
 
-/* ===== SAFARI FIRST INACTIVE TAB INSET START ===== */
 
 /*
  * The first ordinary inactive tab otherwise paints at the complete shelf
@@ -1798,11 +1754,9 @@
     !important;
 }
 
-/* ===== SAFARI FIRST INACTIVE TAB INSET END ===== */
 
 
 
-/* ===== SAFARI DARK MODE AND OVERFLOW STABILIZATION START ===== */
 
 :root {
   --safari-v8-address-foreground:
@@ -1826,8 +1780,8 @@
 }
 
 /*
- * The real input container owns the opaque material. The former root-level
- * blend surface stays disabled so it cannot conceal editable text.
+ * The input container owns the opaque material. The root-level blend surface
+ * stays disabled so it cannot conceal editable text.
  */
 #safari-v8-address-surface,
 #safari-v8-address-surface.visible {
@@ -2077,10 +2031,8 @@
   contain: paint !important;
 }
 
-/* ===== SAFARI DARK MODE AND OVERFLOW STABILIZATION END ===== */
 
 
-/* ===== SAFARI FINAL NEW-TAB TRANSACTION HARDENING START ===== */
 
 /*
  * GWfox-T can inject a search-glass pseudo-element into the input container.
@@ -2100,9 +2052,9 @@
 }
 
 /*
- * This final selector intentionally appears after the shelf stacking rules.
- * At nine ordinary tabs the new-tab button is fixed immediately before the
- * visible all-tabs button and no longer participates in tab-row reflow.
+ * This selector follows the shelf stacking rules. At nine ordinary tabs,
+ * the fixed new-tab button precedes the visible all-tabs button and no
+ * longer participates in tab-row reflow.
  */
 #tabbrowser-tabs[orient="horizontal"]
   :is(#tabs-newtab-button, #new-tab-button).safari-v8-detached-newtab,
@@ -2125,7 +2077,6 @@
   visibility: hidden !important;
 }
 
-/* ===== SAFARI FINAL NEW-TAB TRANSACTION HARDENING END ===== */
 
 /* ===== SAFARI SHARED NATIVE OPENING ===== */
 /*
@@ -2546,9 +2497,9 @@
 
 /* ===== SAFARI NO-SCROLL OPENING GEOMETRY AUTHORITY ===== */
 /*
- * Override the legacy new-tab width transition at higher specificity.
- * The source tab owns opening geometry. The fixed address follows directly.
- * Tab removal and row allocation transitions remain unchanged.
+ * The source tab owns opening geometry, and the fixed address follows it.
+ * Higher specificity prevents the scrolling-layout width transition from
+ * competing while tab removal and row allocation transitions remain unchanged.
  */
 :root.safari-v8-no-scroll.safari-v8-address-active
   #urlbar-container:has(#urlbar)
@@ -2723,10 +2674,9 @@
   margin-inline-end: var(--safari-v8-pill-end, 3px) !important;
 }
 
-/* One opaque material for selected and editing states.
- * Dark gray is an initial calibration, not a sampled Safari color.
+/* One opaque material serves selected and editing states.
  * Do not interpolate the selected background from transparent on Escape:
- * the address surface and the returned tab must exchange paint atomically.
+ * the address surface and returned tab must exchange paint atomically.
  */
 :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox
@@ -2775,8 +2725,8 @@
 }
 
 /* Identical edge treatment in both states.
- * Inset-only paint preserves the measured 3px gap around the capsule;
- * legacy external half-pixel shadows made the sides look tighter.
+ * Inset-only paint preserves the 3px gap without extending the capsule's
+ * painted bounds.
  */
 :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox
@@ -3025,9 +2975,7 @@
   opacity: 1 !important;
 }
 
-/* Final reload adjustment: slightly larger and counterclockwise.
- * Transform artwork only; preserve the button anchor and hit target.
- */
+/* Transform only the reload artwork; preserve its anchor and hit target. */
 #safari-v8-tab-reload::before {
   transform-origin: center !important;
   transform: rotate(0deg) scale(1.03) !important;
@@ -3304,10 +3252,9 @@
 
 /* ===== SAFARI ACTIVE TEXT WHITE CALIBRATION ===== */
 /*
- * Screenshot-informed dark text: Safari's solid strokes measured 235/235/235.
- * Change text paint only, never container opacity or favicon colors.
- * On the color property, currentColor preserves the inherited light color.
- * Existing placeholder and selection rules remain independent.
+ * Change active text paint only, never container opacity or favicon colors.
+ * currentColor preserves the inherited light-theme value; placeholder and
+ * selection rules remain independent.
  */
 :root.safari-v8-no-scroll:not(:-moz-window-inactive)
   #tabbrowser-tabs[orient="horizontal"]
