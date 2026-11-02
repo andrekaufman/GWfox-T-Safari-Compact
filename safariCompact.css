@@ -72,7 +72,6 @@
 #urlbar.safari-v8-moving.safari-v8-visible {
   opacity: 1 !important;
   visibility: visible !important;
-  pointer-events: auto !important;
 }
 
 /* Prevent Firefox breakout mode from changing the measured geometry. */
@@ -216,16 +215,6 @@
 #safari-v8-exact-close.visible:hover {
   background-color: rgb(211, 211, 214) !important;
 }
-
-/*
- * The close button's opaque surface covers the original glyph.
- * Do not modify input padding or margins during hover.
- */
-#urlbar.safari-v8-exact-close-hover #trust-icon {
-  opacity: 0 !important;
-  visibility: hidden !important;
-}
-
 /* Single native leading glyph slot. */
 #urlbar.safari-v8-moving.safari-v8-visible .searchmode-switcher {
   display: none !important;
@@ -426,7 +415,6 @@
 #safari-v8-tab-reload.visible {
   color: light-dark(rgb(18, 18, 18), rgb(248, 248, 250)) !important;
   fill: light-dark(rgb(18, 18, 18), rgb(248, 248, 250)) !important;
-  fill-opacity: 1 !important;
   filter: none !important;
   opacity: 1 !important;
   visibility: visible !important;
@@ -436,7 +424,6 @@
 
 #safari-v8-tab-reload.visible:hover {
   background-color: color-mix(in srgb, currentColor 14%, transparent) !important;
-  fill-opacity: 1 !important;
 }
 
 #safari-v8-tab-reload.visible:active {
@@ -582,13 +569,6 @@
   grid-column: 2 !important;
   grid-row: 1 !important;
 
-  width: 16px !important;
-  min-width: 16px !important;
-  max-width: 16px !important;
-
-  margin: 0 !important;
-  padding: 0 !important;
-
   justify-self: center !important;
 }
 
@@ -606,7 +586,6 @@
 
   width: fit-content !important;
   min-width: 0 !important;
-  max-width: 160px !important;
 
   margin: 0 !important;
   padding: 0 !important;
@@ -759,56 +738,6 @@
   pointer-events: none !important;
 }
 
-/*
- * Controlled Safari-like loading indicator in the same icon slot.
- */
-#tabbrowser-tabs[orient="horizontal"]
-  .tabbrowser-tab[busy]:not([pinned])
-  .tab-icon-stack::before {
-  content: "" !important;
-
-  display: block !important;
-  box-sizing: border-box !important;
-
-  grid-area: 1 / 1 !important;
-
-  width: 13px !important;
-  height: 13px !important;
-
-  margin: 0 !important;
-  padding: 0 !important;
-
-  border: 1.5px solid
-    color-mix(
-      in srgb,
-      currentColor 24%,
-      transparent
-    )
-    !important;
-
-  border-top-color:
-    color-mix(
-      in srgb,
-      currentColor 78%,
-      transparent
-    )
-    !important;
-
-  border-radius: 50% !important;
-
-  animation:
-    safari-v8-tab-spinner
-    700ms linear infinite
-    !important;
-
-  pointer-events: none !important;
-}
-
-@keyframes safari-v8-tab-spinner {
-  to {
-    rotate: 1turn;
-  }
-}
 
 /*
  * Firefox's native close button must not replace the favicon.
@@ -826,10 +755,6 @@
 
   pointer-events: none !important;
   transition: none !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-
 }
 
 
@@ -938,7 +863,6 @@
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-  z-index: 0 !important;
 }
 
 #safari-v8-shelf-geometry-probe.visible {
@@ -1023,7 +947,6 @@
  * Address editing is a separate foreground surface. Keep it full-sized
  * and opaque white regardless of ATBC website colour or color-scheme.
  */
-
 
 
 /* Shelf and real tabs share one stacking context. */
@@ -1111,18 +1034,8 @@
 
 #safari-v8-exact-close,
 #safari-v8-tab-reload {
-  width: 18px !important;
-  height: 18px !important;
-  min-width: 18px !important;
-  min-height: 18px !important;
-  max-width: 18px !important;
-  max-height: 18px !important;
   border-radius: 50% !important;
   background-color: transparent !important;
-  background-size: 9.5px 9.5px !important;
-  transform: none !important;
-  transition: opacity 80ms ease-out, background-color 80ms ease-out !important;
-  z-index: 2147483647 !important;
 }
 
 #safari-v8-exact-close.visible,
@@ -1132,29 +1045,10 @@
   pointer-events: auto !important;
   transform: none !important;
 }
-
-#safari-v8-exact-close.visible:hover,
-#safari-v8-tab-reload.visible:hover {
-  background-color: color-mix(in srgb, currentColor 12%, transparent) !important;
-}
-
 #safari-v8-exact-close.visible:active,
 #safari-v8-tab-reload.visible:active {
   transform: scale(.9) !important;
 }
-
-
-/* Hide only the glyph that physically overlaps the measured close control. */
-#tabbrowser-tabs[orient="horizontal"]
-  .tabbrowser-tab.safari-v8-close-over-icon
-  .tab-icon-image,
-#tabbrowser-tabs[orient="horizontal"]
-  .tabbrowser-tab.safari-v8-close-over-icon
-  .tab-icon-stack::before {
-  visibility: hidden !important;
-  opacity: 0 !important;
-}
-
 /* Keep both controls optically identical; artwork is centered in same canvas. */
 #safari-v8-exact-close,
 #safari-v8-tab-reload {
@@ -1232,15 +1126,6 @@
   opacity: 0 !important;
 }
 
-#safari-v8-exact-close,
-#safari-v8-tab-reload {
-  transition:
-    opacity 80ms ease-out,
-    background-color 80ms ease-out
-    !important;
-}
-
-
 /*
  * Firefox exposes the painted address surface as .urlbar-background.
  * Keep the selected/editing address pill opaque white without changing
@@ -1285,13 +1170,6 @@
   transform: none !important;
   border-radius: 999px !important;
 }
-
-/* Centre the editable address in the complete expanded pill. */
-#urlbar.safari-v8-moving.safari-v8-visible
-  .urlbar-input {
-  text-align: center !important;
-}
-
 /* Keep both edge-control reservations symmetric around the centred text. */
 #urlbar.safari-v8-moving.safari-v8-visible
   > .urlbar-input-container {
@@ -1325,10 +1203,7 @@
   height: calc(100% - 6px) !important;
   min-height: 0 !important;
   border-radius: 999px !important;
-  background: rgb(255, 255, 255) !important;
-  background-color: rgb(255, 255, 255) !important;
   background-image: none !important;
-  box-shadow: inset 0 0 0 .5px rgba(60, 60, 67, .10) !important;
   opacity: 1 !important;
   backdrop-filter: none !important;
 }
@@ -1484,7 +1359,6 @@
  */
 #urlbar.safari-v8-moving.safari-v8-visible
   .urlbar-input::placeholder {
-  color: rgb(72, 72, 74) !important;
   opacity: 1 !important;
 }
 
@@ -1729,11 +1603,9 @@
 :root.safari-v8-no-scroll
   #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox {
-  flex: 0 1 var(--safari-v8-row-width) !important;
   width: var(--safari-v8-row-width) !important;
   min-width: 0 !important;
   max-width: 100% !important;
-  margin-inline: auto !important;
 }
 
 :root.safari-v8-no-scroll
@@ -1873,7 +1745,6 @@
   .tabbrowser-tab:not([pinned])
   .tab-label-container {
   flex: 0 1 auto !important;
-  width: auto !important;
   min-width: 0 !important;
   max-width: 100% !important;
   overflow: hidden !important;
@@ -1931,7 +1802,6 @@
   flex: 0 1 0 !important;
   width: 0 !important;
   min-width: 0 !important;
-  max-width: 0.1px !important;
   padding-inline: 0 !important;
   margin-inline: 0 !important;
 }
@@ -1942,15 +1812,6 @@
   .tabbrowser-tab[hidden] {
   display: none !important;
 }
-
-:root.safari-v8-no-scroll
-  #tabbrowser-tabs[orient="horizontal"]
-  #tabbrowser-arrowscrollbox
-  .tabbrowser-tab:not([pinned]) > .tab-stack {
-  min-width: 0 !important;
-  max-width: 100% !important;
-}
-
 @media (prefers-reduced-motion: reduce) {
   :root.safari-v8-no-scroll
     #tabbrowser-tabs[orient="horizontal"]
@@ -1974,14 +1835,6 @@
   > .tab-stack > .tab-content {
   animation: none !important;
 }
-
-/* ===== SAFARI CENTERED NO-SCROLL SHARES ===== */
-/* Auto margins center the bounded row within the available tab area. */
-:root.safari-v8-no-scroll
-  #tabbrowser-tabs[orient="horizontal"] {
-  justify-content: center !important;
-}
-
 :root.safari-v8-no-scroll
   #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox {
@@ -2010,22 +1863,6 @@
   margin-inline: 0 !important;
   padding-inline: 0 !important;
   flex-grow: 0 !important;
-}
-
-/* Animate the centered shelf's allocation alongside tab removal.
- * Address geometry follows the actual layout through the existing sampler.
- */
-:root.safari-v8-no-scroll
-  #tabbrowser-tabs[orient="horizontal"]
-  #tabbrowser-arrowscrollbox {
-  transition:
-    width 300ms cubic-bezier(.16, 1, .3, 1),
-    flex-basis 300ms cubic-bezier(.16, 1, .3, 1)
-    !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-
 }
 
 /* ===== SAFARI NO-SCROLL OPENING GEOMETRY AUTHORITY ===== */
@@ -2270,8 +2107,6 @@
   border: 0 !important;
   outline: none !important;
   border-radius: 15px !important;
-  box-shadow: inset 0 0 0 .5px var(--safari-v8-address-edge) !important;
-  background-image: none !important;
   filter: none !important;
   backdrop-filter: none !important;
   mix-blend-mode: normal !important;
@@ -2389,7 +2224,6 @@
     url("resource://content-accessible/close-12.svg"),
     radial-gradient(circle closest-side,
       rgb(226, 226, 228) 96%, transparent 100%) !important;
-  background-size: 8px 8px, 14px 14px !important;
   background-position: center, center !important;
   background-repeat: no-repeat !important;
   fill: rgb(72, 72, 74) !important;
@@ -2406,7 +2240,6 @@
 #safari-v8-tab-reload.visible:hover,
 #safari-v8-tab-reload.visible:active {
   background-color: transparent !important;
-  background-size: 14px 14px !important;
   box-shadow: none !important;
   text-shadow: none !important;
   filter: none !important;
@@ -2586,7 +2419,6 @@
   width: 37.5px !important;
   flex: 0 0 37.5px !important;
   margin: 4px -1.5px 0 8px !important;
-  border-radius: 50% 0 0 50% !important;
   clip-path: inset(-20px 1.5px -20px -20px);
 }
 
