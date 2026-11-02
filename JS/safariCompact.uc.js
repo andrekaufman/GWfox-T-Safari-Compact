@@ -183,10 +183,145 @@
   let visible = false;
   let closeHover = false;
   let reloadHover = false;
-  let newTabOpening = false;
-  let restoreTabCommandPending = false;
-  let newTabGeometryToken = 0;
-  let sharedOpeningGeometry = null;
+  /*
+   * Own the complete interactive new-tab transaction. Geometry consumers may
+   * read the current snapshot, but identity, cancellation, restoration
+   * classification and preload capability remain private to this adapter.
+   */
+  const newTabAdapter = (() => {
+    const state = {
+      identity: 0,
+      opening: false,
+      tab: null,
+      geometry: null,
+      restorePending: false,
+      preloadChecked: false,
+      replenishPreload: null
+    };
+
+    function markRestoreCommand() {
+      state.restorePending = true;
+      scheduler.scheduleTimer("restore-tab-command", () => {
+        state.restorePending = false;
+      }, 1000);
+    }
+
+    function consumeRestoreClassification() {
+      const restoring = state.restorePending;
+      scheduler.cancelTimer("restore-tab-command");
+      state.restorePending = false;
+      return restoring;
+    }
+
+    function begin(tab, geometry = null) {
+      scheduler.cancelFrame("opening-geometry");
+      state.identity += 1;
+      state.opening = true;
+      state.tab = tab;
+      state.geometry = geometry;
+      return state.identity;
+    }
+
+    function owns(tab, identity = state.identity) {
+      return state.opening &&
+        identity === state.identity &&
+        tab === state.tab;
+    }
+
+    function setGeometry(geometry) {
+      state.geometry = geometry;
+    }
+
+    function cancel(tab = null) {
+      if (tab && tab !== state.tab) return false;
+      scheduler.cancelFrame("opening-geometry");
+      state.identity += 1;
+      state.opening = false;
+      state.tab = null;
+      state.geometry = null;
+      clearOpeningContentOcclusion();
+      document.documentElement.classList.remove("safari-v8-opening-clock");
+      return true;
+    }
+
+    function complete(tab, identity) {
+      if (!owns(tab, identity)) return false;
+      state.opening = false;
+      state.tab = null;
+      state.geometry = null;
+      clearOpeningContentOcclusion();
+      document.documentElement.classList.remove("safari-v8-opening-clock");
+      return true;
+    }
+
+    function preloadCallable() {
+      if (state.preloadChecked) return state.replenishPreload;
+      state.preloadChecked = true;
+      try {
+        const module = ChromeUtils.importESModule(
+          "moz-src:///browser/components/tabbrowser/NewTabPagePreloading.sys.mjs"
+        );
+        const owner = module?.NewTabPagePreloading;
+        if (typeof owner?.maybeCreatePreloadedBrowser === "function") {
+          state.replenishPreload =
+            owner.maybeCreatePreloadedBrowser.bind(owner);
+        }
+      } catch {
+        // Unsupported Firefox versions retain native preload behavior.
+      }
+      return state.replenishPreload;
+    }
+
+    function replenish(tab) {
+      if (lifecycle.disposed ||
+          !noScrollLayoutEnabled() ||
+          !tab?.isConnected ||
+          tab.closing ||
+          !tab.linkedPanel ||
+          gBrowser.preloadedBrowser ||
+          window.closed) {
+        return;
+      }
+
+      try {
+        preloadCallable()?.(window);
+      } catch {
+        // Preserve native behavior without exposing privileged diagnostics.
+      }
+    }
+
+    function dispose() {
+      scheduler.cancelTimer("restore-tab-command");
+      state.restorePending = false;
+      cancel();
+      state.preloadChecked = true;
+      state.replenishPreload = null;
+    }
+
+    return {
+      begin,
+      cancel,
+      complete,
+      consumeRestoreClassification,
+      dispose,
+      markRestoreCommand,
+      owns,
+      replenish,
+      setGeometry,
+      get geometry() {
+        return state.geometry;
+      },
+      get identity() {
+        return state.identity;
+      },
+      get opening() {
+        return state.opening;
+      },
+      get tab() {
+        return state.tab;
+      }
+    };
+  })();
   let addressOwner = null;
   let shelfProbeAnimationToken = 0;
   const safetyGap = 10;
@@ -490,9 +625,9 @@
       ?.getBoundingClientRect() || null;
     const arrow = document.querySelector("#tabbrowser-arrowscrollbox");
     const arrowRect = arrow?.getBoundingClientRect() || null;
-    const opening = sharedOpeningGeometry;
-    const presentationOpening = newTabOpening && opening;
-    const closing = !newTabOpening && [...gBrowser.tabs].some(tab =>
+    const opening = newTabAdapter.geometry;
+    const presentationOpening = newTabAdapter.opening && opening;
+    const closing = !newTabAdapter.opening && [...gBrowser.tabs].some(tab =>
       tab.closing || tab.classList.contains("safari-v8-retiring")
     );
     const reduceMotion = window.matchMedia(
@@ -540,8 +675,8 @@
       presentationOpening,
       closing,
       reduceMotion,
-      newTabOpening,
-      draggedControlTab,
+      newTabOpening: newTabAdapter.opening,
+      draggedControlTab: dragAdapter.owner,
       viewportWidth: window.innerWidth,
       tabMetrics
     };
@@ -661,7 +796,7 @@
   }
 
   function updateOpeningContentSlide() {
-    const opening = sharedOpeningGeometry;
+    const opening = newTabAdapter.geometry;
     if (!visible || opening?.tab !== selectedTab() ||
         opening.stationaryRight == null ||
         !opening.contentOrigins ||
@@ -699,7 +834,7 @@
 
   function clearOpeningContentOcclusion() {
     clearOpeningContentSlide();
-    sharedOpeningGeometry?.tab.classList.remove("safari-v8-opening-tab");
+    newTabAdapter.geometry?.tab.classList.remove("safari-v8-opening-tab");
     for (const content of openingContentMasks) {
       content.classList.remove("safari-v8-opening-occluded");
       content.style.removeProperty("--safari-v8-occlusion-start");
@@ -710,9 +845,9 @@
 
   function updateOpeningContentOcclusion(left, right) {
     const retained = new Set();
-    if (visible && sharedOpeningGeometry?.tab === selectedTab()) {
+    if (visible && newTabAdapter.geometry?.tab === selectedTab()) {
       for (const tab of gBrowser.tabs) {
-        if (tab === sharedOpeningGeometry.tab ||
+        if (tab === newTabAdapter.geometry.tab ||
             tab.hidden || tab.closing || tab.pinned) continue;
         const content = tab.querySelector(".tab-content");
         if (!content) continue;
@@ -761,7 +896,7 @@
       setStyleProperty(urlbar, name, tab.style.getPropertyValue(name));
     }
 
-    const opening = sharedOpeningGeometry;
+    const opening = newTabAdapter.geometry;
     const targetWidth = opening?.tab === tab
       ? geometry?.editWidth
       : rect.width;
@@ -914,7 +1049,7 @@
     const navigationStateChanged = previousNavigationState !== null &&
       previousNavigationState !== navigationState;
     previousNavigationState = navigationState;
-    const navigationWidthMoving = !newTabOpening &&
+    const navigationWidthMoving = !newTabAdapter.opening &&
       ![...gBrowser.tabs].some(tab => tab.closing ||
         tab.classList.contains("safari-v8-retiring")) &&
       (navigationStateChanged || !!back?.getAnimations().some(animation =>
@@ -1255,7 +1390,7 @@
   }
 
   function refreshAddressControls() {
-    if (!visible || newTabOpening) return;
+    if (!visible || newTabAdapter.opening) return;
     if (closeHover) positionCloseButton();
     if (reloadHover) positionReloadButton();
   }
@@ -1345,7 +1480,7 @@
        * address transaction from ResizeObserver or focus events during that
        * interval was the source of the frame-by-frame plus-button movement.
        */
-      if (newTabOpening) return;
+      if (newTabAdapter.opening) return;
 
       updateAllSafariDisplayLabels();
       const geometry = updatePlusPlacement();
@@ -1499,7 +1634,7 @@
       return;
     }
 
-    if (wasVisible && tab && !newTabOpening) {
+    if (wasVisible && tab && !newTabAdapter.opening) {
       tab.classList.remove("safari-v8-content-return");
       void tab.getBoundingClientRect();
       tab.classList.add("safari-v8-content-return");
@@ -1546,7 +1681,7 @@
 
     const size = 18;
     const target = controlTargetTab();
-    const addressTarget = !draggedControlTab &&
+    const addressTarget = !dragAdapter.owner &&
       visible && target === addressOwner;
     // Ordinary hover belongs to the leading edge, not the centered favicon.
     // Only address hover replaces the actual address glyph.
@@ -1605,7 +1740,7 @@
   function showClose(tab = null) {
     const owner = tab || (visible ? addressState.owner : null);
     const surface = tab
-      ? (draggedControlTab ? "drag" : "tab")
+      ? (dragAdapter.owner ? "drag" : "tab")
       : "address";
 
     if (!setControlOwner(owner, surface)) {
@@ -1640,222 +1775,321 @@
     closeButton.classList.add("visible");
   }
 
-  // Fixed controls follow the dragged tab's painted native transform.
-  let draggedControlTab = null;
-  let draggedControlEnding = false;
-  let draggedControlDeadline = 0;
+  /*
+   * Localize Firefox-private drag capabilities and method patches. Missing
+   * capabilities disable only the corresponding custom enhancement, leaving
+   * Firefox's native drag behavior in authority.
+   */
+  const dragAdapter = (() => {
+    const state = {
+      owner: null,
+      ending: false,
+      deadline: 0,
+      installed: false
+    };
+    const native = tabs.tabDragAndDrop;
+    const capabilities = {
+      start: typeof native?.startTabDrag === "function",
+      pinnedBounds:
+        typeof native?._checkWithinPinnedContainerBounds === "function",
+      shelfForwarding:
+        typeof native?.getDropEffectForTabDrag === "function" &&
+        typeof native?.handle_dragover === "function" &&
+        typeof native?.handle_drop === "function"
+    };
+    const originalStart = capabilities.start ? native.startTabDrag : null;
+    const originalPinnedBounds = capabilities.pinnedBounds
+      ? native._checkWithinPinnedContainerBounds
+      : null;
 
-  function stopDraggedControls() {
-    scheduler.cancelFrame("drag-follow");
-    if (controlState.surface === "drag") clearControlOwner();
-    draggedControlTab = null;
-    draggedControlEnding = false;
-    document.querySelector("#tabbrowser-arrowscrollbox")
-      ?.classList.remove("safari-v8-drag-shelf-clip");
-    for (const control of [closeButton, reloadButton]) {
-      control.classList.remove("safari-v8-drag-control-clip");
-      control.style.removeProperty("--safari-v8-drag-clip-left");
-      control.style.removeProperty("--safari-v8-drag-clip-right");
-    }
-  }
-
-  // Keep native transfer/adoption, but show the lone tab rather than a
-  // page thumbnail. Intercept both image calls because native capture updates
-  // the drag image asynchronously after startTabDrag has returned.
-  const nativeDragOwner = tabs.tabDragAndDrop;
-  const originalStartTabDrag = nativeDragOwner?.startTabDrag;
-
-  // The centered shelf leaves a large empty leading margin. Native drag-to-pin
-  // interprets that margin as a pin target, expands the indicator and locks
-  // the tab container's maxWidth. Disable that cue at its activation point,
-  // not merely its paint, while preserving native drop/reset and menu pinning.
-  const originalCheckPinnedBounds =
-    nativeDragOwner?._checkWithinPinnedContainerBounds;
-  function checkPinnedBoundsWithoutCompactCue(...args) {
-    if (noScrollLayoutEnabled() && !tabs.verticalMode) {
-      const indicator = this._pinnedDropIndicator;
-      indicator?.removeAttribute("visible");
-      indicator?.removeAttribute("interactive");
-      return;
-    }
-    return originalCheckPinnedBounds.apply(this, args);
-  }
-  function startTabDragWithLoneTabImage(event, tab, options = {}) {
-    if (!noScrollLayoutEnabled() || tabs.verticalMode || tabs._isCustomizing ||
-        options.fromTabList || !tab?.matches?.(".tabbrowser-tab") ||
-        tab.pinned || tab.hidden || tab.closing || tab.splitview ||
-        !tab.isConnected || !event.dataTransfer ||
-        [...gBrowser.tabs].filter(item => !item.hidden && !item.closing)
-          .length !== 1) {
-      return originalStartTabDrag.call(this, event, tab, options);
-    }
-
-    const rect = tab.getBoundingClientRect();
-    const offsetX = Math.round(Math.max(
-      0, Math.min(rect.width, event.clientX - rect.left)
-    ));
-    const offsetY = Math.round(Math.max(
-      0, Math.min(rect.height, event.clientY - rect.top)
-    ));
-    const transfer = new Proxy(event.dataTransfer, {
-      get(target, key) {
-        if (key === "setDragImage" || key === "updateDragImage") {
-          return (image, x, y) => {
-            if (tab.isConnected && !tab.closing) {
-              return target[key](tab, offsetX, offsetY);
-            }
-            return target[key](image, x, y);
-          };
-        }
-        const value = Reflect.get(target, key, target);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-      set(target, key, value) {
-        return Reflect.set(target, key, value, target);
+    function stop() {
+      scheduler.cancelFrame("drag-follow");
+      if (controlState.surface === "drag") clearControlOwner();
+      state.owner = null;
+      state.ending = false;
+      state.deadline = 0;
+      document.querySelector("#tabbrowser-arrowscrollbox")
+        ?.classList.remove("safari-v8-drag-shelf-clip");
+      for (const control of [closeButton, reloadButton]) {
+        control.classList.remove("safari-v8-drag-control-clip");
+        control.style.removeProperty("--safari-v8-drag-clip-left");
+        control.style.removeProperty("--safari-v8-drag-clip-right");
       }
-    });
-    const projected = new Proxy(event, {
-      get(target, key) {
-        if (key === "dataTransfer") return transfer;
-        const value = Reflect.get(target, key, target);
-        return typeof value === "function" ? value.bind(target) : value;
-      }
-    });
-    // A lone tab has nothing to reorder in its source window. Use the
-    // native non-strip transfer path: keep the source stationary and show
-    // the independent drag image from dragstart, without movingtab mode.
-    // Native drop/adoption and dragend still own landing and cancellation.
-    return originalStartTabDrag.call(this, projected, tab, {
-      ...options,
-      fromTabList: true
-    });
-  }
+    }
 
-  function startDraggedControls(event) {
-    if (lifecycle.disposed) return;
-    const tab = event.target.closest?.(".tabbrowser-tab");
-    if (!noScrollLayoutEnabled() || !tab ||
-        tab.hidden || tab.closing) return;
-    stopDraggedControls();
-    draggedControlTab = tab;
-    tabCloseTarget = tab;
-    setControlOwner(tab, "drag");
-    const row = document.querySelector("#tabbrowser-arrowscrollbox");
-    row?.classList.add("safari-v8-drag-shelf-clip");
-    const follow = () => {
-      const owner = draggedControlTab;
-      if (!owner || !owner.isConnected || owner.closing ||
-          owner.hidden || (draggedControlEnding &&
-          performance.now() >= draggedControlDeadline)) {
-        stopDraggedControls();
+    function checkPinnedBoundsWithoutCompactCue(...args) {
+      if (noScrollLayoutEnabled() && !tabs.verticalMode) {
+        const indicator = this._pinnedDropIndicator;
+        indicator?.removeAttribute("visible");
+        indicator?.removeAttribute("interactive");
         return;
       }
-      // Root-level fixed controls do not inherit the row's paint clip.
-      // This direct per-frame paint read follows Firefox's native transformed
-      // drag surface; it does not own or alter no-scroll allocation geometry.
-      const rect = tabPaintRect(owner);
-      const shelf = row?.getBoundingClientRect();
-      const clipControl = (control, left) => {
-        const start = shelf ? Math.min(18, Math.max(0, shelf.left - left)) : 18;
-        const end = shelf ? Math.min(18, Math.max(0, left + 18 - shelf.right)) : 0;
-        for (const [name, value] of [
-          ["--safari-v8-drag-clip-left", start],
-          ["--safari-v8-drag-clip-right", end]
-        ]) {
-          const next = `${value.toFixed(3)}px`;
-          if (control.style.getPropertyValue(name) !== next) {
-            control.style.setProperty(name, next);
+      return originalPinnedBounds.apply(this, args);
+    }
+
+    function startTabDragWithLoneTabImage(event, tab, options = {}) {
+      if (!noScrollLayoutEnabled() ||
+          tabs.verticalMode ||
+          tabs._isCustomizing ||
+          options.fromTabList ||
+          !tab?.matches?.(".tabbrowser-tab") ||
+          tab.pinned ||
+          tab.hidden ||
+          tab.closing ||
+          tab.splitview ||
+          !tab.isConnected ||
+          !event.dataTransfer ||
+          [...gBrowser.tabs].filter(item => !item.hidden && !item.closing)
+            .length !== 1) {
+        return originalStart.call(this, event, tab, options);
+      }
+
+      const rect = tab.getBoundingClientRect();
+      const offsetX = Math.round(Math.max(
+        0,
+        Math.min(rect.width, event.clientX - rect.left)
+      ));
+      const offsetY = Math.round(Math.max(
+        0,
+        Math.min(rect.height, event.clientY - rect.top)
+      ));
+      const transfer = new Proxy(event.dataTransfer, {
+        get(target, key) {
+          if (key === "setDragImage" || key === "updateDragImage") {
+            return (image, x, y) => {
+              const method = target[key];
+              if (typeof method !== "function") return undefined;
+              if (tab.isConnected && !tab.closing) {
+                return method.call(target, tab, offsetX, offsetY);
+              }
+              return method.call(target, image, x, y);
+            };
+          }
+          const value = Reflect.get(target, key, target);
+          return typeof value === "function"
+            ? value.bind(target)
+            : value;
+        },
+        set(target, key, value) {
+          return Reflect.set(target, key, value, target);
+        }
+      });
+      const projected = new Proxy(event, {
+        get(target, key) {
+          if (key === "dataTransfer") return transfer;
+          const value = Reflect.get(target, key, target);
+          return typeof value === "function"
+            ? value.bind(target)
+            : value;
+        }
+      });
+
+      return originalStart.call(this, projected, tab, {
+        ...options,
+        fromTabList: true
+      });
+    }
+
+    function start(event) {
+      if (lifecycle.disposed || !event.isTrusted) return;
+      const tab = event.target.closest?.(".tabbrowser-tab");
+      if (!noScrollLayoutEnabled() ||
+          !tab ||
+          tab.hidden ||
+          tab.closing ||
+          !tab.isConnected ||
+          !gBrowser.tabs.includes(tab)) {
+        return;
+      }
+
+      stop();
+      state.owner = tab;
+      tabCloseTarget = tab;
+      setControlOwner(tab, "drag");
+
+      const row = document.querySelector("#tabbrowser-arrowscrollbox");
+      row?.classList.add("safari-v8-drag-shelf-clip");
+
+      const follow = () => {
+        const owner = state.owner;
+        if (!owner ||
+            !owner.isConnected ||
+            owner.closing ||
+            owner.hidden ||
+            !gBrowser.tabs.includes(owner) ||
+            (state.ending && performance.now() >= state.deadline)) {
+          stop();
+          return;
+        }
+
+        const rect = tabPaintRect(owner);
+        const shelf = row?.getBoundingClientRect();
+        const clipControl = (control, left) => {
+          const clipStart = shelf
+            ? Math.min(18, Math.max(0, shelf.left - left))
+            : 18;
+          const clipEnd = shelf
+            ? Math.min(18, Math.max(0, left + 18 - shelf.right))
+            : 0;
+
+          for (const [name, value] of [
+            ["--safari-v8-drag-clip-left", clipStart],
+            ["--safari-v8-drag-clip-right", clipEnd]
+          ]) {
+            const next = `${value.toFixed(3)}px`;
+            if (control.style.getPropertyValue(name) !== next) {
+              control.style.setProperty(name, next);
+            }
+          }
+          control.classList.add("safari-v8-drag-control-clip");
+        };
+
+        clipControl(closeButton, rect.left + 9);
+        clipControl(reloadButton, rect.right - 32);
+
+        const setCoordinate = (element, name, value) => {
+          const next = `${value}px`;
+          if (element.style.getPropertyValue(name) !== next) {
+            element.style.setProperty(name, next);
+          }
+        };
+
+        if (closeHover) {
+          setCoordinate(closeButton, "--close-left", rect.left + 9);
+          setCoordinate(
+            closeButton,
+            "--close-top",
+            rect.top + rect.height / 2 - 9
+          );
+        }
+        if (reloadHover) {
+          if (owner === selectedTab()) {
+            setCoordinate(reloadButton, "--reload-left", rect.right - 32);
+            setCoordinate(
+              reloadButton,
+              "--reload-top",
+              rect.top + rect.height / 2 - 9
+            );
+          } else {
+            hideReload();
           }
         }
-        control.classList.add("safari-v8-drag-control-clip");
+
+        scheduler.scheduleFrame("drag-follow", follow);
       };
-      clipControl(closeButton, rect.left + 9);
-      clipControl(reloadButton, rect.right - 32);
-      const setCoordinate = (element, name, value) => {
-        const next = `${value}px`;
-        if (element.style.getPropertyValue(name) !== next) {
-          element.style.setProperty(name, next);
-        }
-      };
-      if (closeHover) {
-        setCoordinate(closeButton, "--close-left", rect.left + 9);
-        setCoordinate(closeButton, "--close-top",
-          rect.top + rect.height / 2 - 9);
-      }
-      if (reloadHover) {
-        if (owner === selectedTab()) {
-          setCoordinate(reloadButton, "--reload-left", rect.right - 32);
-          setCoordinate(reloadButton, "--reload-top",
-            rect.top + rect.height / 2 - 9);
-        } else {
-          hideReload();
-        }
-      }
+
       scheduler.scheduleFrame("drag-follow", follow);
-    };
-    scheduler.scheduleFrame("drag-follow", follow);
-  }
-
-  // Native reordering only receives dragover while the pointer targets tabs.
-  // Extend below the shelf by three row heights; distant detach stays native.
-  function forwardShelfDrag(event) {
-    if (lifecycle.disposed) return;
-    if (!noScrollLayoutEnabled() || !draggedControlTab ||
-        draggedControlEnding || tabs.verticalMode || tabs._isCustomizing ||
-        draggedControlTab.pinned || draggedControlTab.hidden ||
-        draggedControlTab.closing || !draggedControlTab.isConnected ||
-        tabs.contains(event.target)) return;
-
-    const native = tabs.tabDragAndDrop;
-    const data = draggedControlTab._dragData;
-    const row = document.querySelector("#tabbrowser-arrowscrollbox");
-    if (!native || !data || data.fromTabList || !row) return;
-
-    // Never intercept links, copies, foreign tabs, or unrelated drag sessions.
-    const transfer = event.dataTransfer;
-    try {
-      if (!transfer || transfer.mozGetDataAt(
-        "application/x-moz-tabbrowser-tab", 0
-      ) !== draggedControlTab ||
-          native.getDropEffectForTabDrag(event) !== "move") return;
-    } catch {
-      return;
     }
 
-    const rect = row.getBoundingClientRect();
-    const tolerance = rect.height / 2;
-    if (rect.width <= 0 || rect.height <= 0 ||
-        event.clientX < rect.left || event.clientX > rect.right ||
-        event.clientY < rect.top - tolerance ||
-        event.clientY > rect.bottom + rect.height * 3) return;
-
-    // Keep native horizontal animation and landing as the sole geometry owner.
-    // Project only the cross-axis and target; retain the real transfer/modifiers
-    // and bind Event methods to their original receiver.
-    const projected = new Proxy(event, {
-      get(target, key) {
-        if (key === "target" || key === "originalTarget") return row;
-        if (key === "screenY") return data.screenY;
-        if (key === "clientY") return rect.top + rect.height / 2;
-        const value = Reflect.get(target, key, target);
-        return typeof value === "function" ? value.bind(target) : value;
+    function validTransfer(event, owner) {
+      if (!capabilities.shelfForwarding || !event.isTrusted) return false;
+      try {
+        return event.dataTransfer?.mozGetDataAt(
+          "application/x-moz-tabbrowser-tab",
+          0
+        ) === owner &&
+          native.getDropEffectForTabDrag(event) === "move";
+      } catch {
+        return false;
       }
-    });
-    if (event.type === "dragover") {
-      transfer.dropEffect = "move";
-      native.handle_dragover(projected);
-    } else {
-      event.preventDefault();
-      native.handle_drop(projected);
     }
-  }
 
-  function finishDraggedControls() {
-    if (!draggedControlTab) return;
-    // Sampling window only; do not change native landing duration.
-    draggedControlEnding = true;
-    draggedControlDeadline = performance.now() + 340;
-  }
+    function forward(event) {
+      const owner = state.owner;
+      if (lifecycle.disposed ||
+          !owner ||
+          state.ending ||
+          !noScrollLayoutEnabled() ||
+          tabs.verticalMode ||
+          tabs._isCustomizing ||
+          owner.pinned ||
+          owner.hidden ||
+          owner.closing ||
+          !owner.isConnected ||
+          !gBrowser.tabs.includes(owner) ||
+          tabs.contains(event.target)) {
+        return;
+      }
+
+      const data = owner._dragData;
+      const row = document.querySelector("#tabbrowser-arrowscrollbox");
+      if (!data ||
+          data.fromTabList ||
+          !row ||
+          !validTransfer(event, owner)) {
+        return;
+      }
+
+      const rect = row.getBoundingClientRect();
+      const tolerance = rect.height / 2;
+      if (rect.width <= 0 ||
+          rect.height <= 0 ||
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top - tolerance ||
+          event.clientY > rect.bottom + rect.height * 3) {
+        return;
+      }
+
+      const projected = new Proxy(event, {
+        get(target, key) {
+          if (key === "target" || key === "originalTarget") return row;
+          if (key === "screenY") return data.screenY;
+          if (key === "clientY") return rect.top + rect.height / 2;
+          const value = Reflect.get(target, key, target);
+          return typeof value === "function"
+            ? value.bind(target)
+            : value;
+        }
+      });
+
+      if (event.type === "dragover") {
+        event.dataTransfer.dropEffect = "move";
+        native.handle_dragover(projected);
+      } else if (event.type === "drop") {
+        event.preventDefault();
+        native.handle_drop(projected);
+      }
+    }
+
+    function finish(event) {
+      if (!event.isTrusted || !state.owner) return;
+      state.ending = true;
+      state.deadline = performance.now() + 340;
+    }
+
+    function install() {
+      if (state.installed) return;
+      state.installed = true;
+
+      if (capabilities.start) {
+        patchMethod(native, "startTabDrag", startTabDragWithLoneTabImage);
+      }
+      if (capabilities.pinnedBounds) {
+        patchMethod(
+          native,
+          "_checkWithinPinnedContainerBounds",
+          checkPinnedBoundsWithoutCompactCue
+        );
+      }
+
+      ownEvent(tabs, "dragstart", start, true);
+      if (capabilities.shelfForwarding) {
+        ownEvent(window, "dragover", forward, true);
+        ownEvent(window, "drop", forward, true);
+      }
+      ownEvent(window, "dragend", finish, true);
+      ownEvent(window, "drop", finish, true);
+    }
+
+    return {
+      install,
+      stop,
+      get owner() {
+        return state.owner;
+      }
+    };
+  })();
 
   function controlTargetTab() {
     return validTabOwner(controlState.owner) ? controlState.owner : null;
@@ -1915,7 +2149,7 @@
       !tabCloseTarget ? addressState.owner : tabCloseTarget;
     const surface = !tabCloseTarget && visible
       ? "address"
-      : (draggedControlTab ? "drag" : "tab");
+      : (dragAdapter.owner ? "drag" : "tab");
 
     if (!setControlOwner(owner, surface) ||
         controlTargetTab() !== selectedTab() ||
@@ -1934,7 +2168,7 @@
     if (lifecycle.disposed || !event.isTrusted ||
         event.type !== "pointermove") return;
     // Drag ownership must not follow tabs crossed by the pointer.
-    if (draggedControlTab) return;
+    if (dragAdapter.owner) return;
     const onClose =
       event.target === closeButton || closeButton.contains(event.target);
     const onReload =
@@ -2139,9 +2373,10 @@
     if (lifecycle.disposed) return;
     if (noScrollLayoutEnabled()) {
       cancelContentHandoff();
-      const opening = sharedOpeningGeometry;
-      if (newTabOpening && opening) {
-        if (opening.tab === selectedTab()) {
+      const opening = newTabAdapter.geometry;
+      if (newTabAdapter.opening && opening) {
+        if (newTabAdapter.owns(opening.tab) &&
+            opening.tab === selectedTab()) {
           // TabOpen can paint before Firefox commits selection. Transfer ownership
           // at selection rather than at animation completion.
           if (visible && addressOwner !== opening.tab) {
@@ -2149,22 +2384,17 @@
               true,
               opening.tab,
               "opening",
-              newTabGeometryToken
+              newTabAdapter.identity
             );
           }
         } else {
           // A real selection away retires the transaction synchronously.
           // Its queued focus and geometry callbacks must not reclaim paint.
-          scheduler.cancelFrame("opening-geometry");
-          newTabGeometryToken += 1;
-          clearOpeningContentOcclusion();
-          sharedOpeningGeometry = null;
-          document.documentElement.classList.remove("safari-v8-opening-clock");
-          newTabOpening = false;
+          newTabAdapter.cancel(opening.tab);
         }
       }
       // Retire the old overlay before another tab can paint beneath it.
-      if (!newTabOpening && !reconcileAddressWithSelection()) {
+      if (!newTabAdapter.opening && !reconcileAddressWithSelection()) {
         hideCleanGlyph();
       }
       updateNoScrollLayout();
@@ -2180,7 +2410,7 @@
      */
 
     scheduler.scheduleMicrotask(() => {
-      if (newTabOpening) return;
+      if (newTabAdapter.opening) return;
       // TabSelect may finish after TabOpen's address ownership transaction.
       // Do not retire the new tab's already focused address surface.
       const focused = document.activeElement;
@@ -2197,7 +2427,7 @@
   function onFocusIn(event) {
     if (lifecycle.disposed || !event.isTrusted) return;
     if (
-      newTabOpening ||
+      newTabAdapter.opening ||
       (event.target !== input && !urlbar.contains(event.target))
     ) {
       return;
@@ -2212,7 +2442,7 @@
   function onFocusOut() {
     if (lifecycle.disposed) return;
     scheduler.scheduleFrame("focus-out", () => {
-      if (newTabOpening) return;
+      if (newTabAdapter.opening) return;
 
       const focused = document.activeElement;
       if (focused !== input && !urlbar.contains(focused)) {
@@ -2230,10 +2460,7 @@
       !event.ctrlKey &&
       event.key.toLowerCase() === "t"
     ) {
-      restoreTabCommandPending = true;
-      scheduler.scheduleTimer("restore-tab-command", () => {
-        restoreTabCommandPending = false;
-      }, 1000);
+      newTabAdapter.markRestoreCommand();
       return;
     }
 
@@ -2247,7 +2474,7 @@
   function finishStableNewTab(openedTab, token) {
     if (lifecycle.disposed) return;
     if (
-      token !== newTabGeometryToken ||
+      !newTabAdapter.owns(openedTab, token) ||
       openedTab !== gBrowser.selectedTab ||
       openedTab.closing ||
       openedTab.hidden
@@ -2260,10 +2487,7 @@
      * stabilized. Retain the proven pre-shortening expansion, plus placement,
      * shelf and ownership logic unchanged.
      */
-    clearOpeningContentOcclusion();
-    sharedOpeningGeometry = null;
-    document.documentElement.classList.remove("safari-v8-opening-clock");
-    newTabOpening = false;
+    if (!newTabAdapter.complete(openedTab, token)) return;
     // TabOpen can precede native selection: its initial address owner may
     // still be the previous tab. Commit ownership to the validated new tab
     // before finishing geometry, so Cmd+L cannot reopen the same surface.
@@ -2298,12 +2522,9 @@
     scheduler.cancelFrame("opening-geometry");
     if (noScrollLayoutEnabled()) {
       const sample = () => {
-        if (token !== newTabGeometryToken) return;
+        if (!newTabAdapter.owns(openedTab, token)) return;
         if (openedTab !== selectedTab() || openedTab.pinned) {
-          clearOpeningContentOcclusion();
-          sharedOpeningGeometry = null;
-          document.documentElement.classList.remove("safari-v8-opening-clock");
-          newTabOpening = false;
+          newTabAdapter.cancel(openedTab);
           render();
           return;
         }
@@ -2319,7 +2540,7 @@
         const reduced = window.matchMedia(
           "(prefers-reduced-motion: reduce)"
         ).matches;
-        const opening = sharedOpeningGeometry;
+        const opening = newTabAdapter.geometry;
         if (opening) {
           opening.progress = reduced ? 1 :
             typeof progress === "number" ? progress : fadedIn ? 1 : 0;
@@ -2341,32 +2562,15 @@
   }
 
 
-  // Native replenishment normally waits for the opening transition.
-  // Refill after the current tab-creation transaction instead, so a rapid
-  // second Cmd+T can consume prepared content. Native policy/counts still
-  // decide whether a preload may be created.
-  function replenishNewTabPreload(openedTab) {
-    if (lifecycle.disposed) return;
-    if (!noScrollLayoutEnabled() || !openedTab?.isConnected ||
-        openedTab.closing || !openedTab.linkedPanel ||
-        gBrowser.preloadedBrowser || window.closed) return;
-    try {
-      const { NewTabPagePreloading } = ChromeUtils.importESModule(
-        "moz-src:///browser/components/tabbrowser/NewTabPagePreloading.sys.mjs"
-      );
-      NewTabPagePreloading.maybeCreatePreloadedBrowser(window);
-    } catch {
-      console.error("Safari Compact: native new-tab preload failed");
-    }
-  }
+  // Native preload replenishment is lazy, cached and capability-checked
+  // by the adapter. Failure leaves Firefox's native policy untouched.
 
   function onTabOpen(event) {
     if (lifecycle.disposed) return;
 
     const openedTab = event.target;
-    const restoringClosedTab = restoreTabCommandPending;
-    scheduler.cancelTimer("restore-tab-command");
-    restoreTabCommandPending = false;
+    const restoringClosedTab =
+      newTabAdapter.consumeRestoreClassification();
 
     /*
      * Startup tabs and tabs restored by Cmd+Shift+T are state reconciliation,
@@ -2408,11 +2612,9 @@
 
     // TabOpen precedes native load/selection initialization. Do not create
     // another browser reentrantly inside that unfinished transaction.
-    scheduler.scheduleMicrotask(() => replenishNewTabPreload(openedTab));
-    const token = ++newTabGeometryToken;
-    clearOpeningContentOcclusion();
-    sharedOpeningGeometry = null;
-    document.documentElement.classList.remove("safari-v8-opening-clock");
+    scheduler.scheduleMicrotask(() => newTabAdapter.replenish(openedTab));
+    newTabAdapter.cancel();
+    let openingGeometryState = null;
     if (noScrollLayoutEnabled() && !openedTab.pinned) {
       const shelf = captureShelfMetrics();
       const rect = shelf.arrowRect;
@@ -2424,7 +2626,7 @@
           shelf.pinnedWidth
       );
       if (rect && rect.width > 0) {
-        sharedOpeningGeometry = {
+        openingGeometryState = {
           tab: openedTab, left: rect.left, width: rect.width, progress: 0,
           fullShelf: openingCount > 4 && available > 0 &&
             Math.abs(rect.width - available) <= 1,
@@ -2434,7 +2636,8 @@
         document.documentElement.classList.add("safari-v8-opening-clock");
       }
     }
-    newTabOpening = true;
+    const token =
+      newTabAdapter.begin(openedTab, openingGeometryState);
     /*
      * Replace Firefox's native "Ny flik" face inside TabOpen, before the next
      * painted frame. The real URL field follows the native opening width with
@@ -2459,7 +2662,7 @@
     // opening tab.
     scheduler.scheduleMicrotask(() => {
       if (
-        token !== newTabGeometryToken ||
+        !newTabAdapter.owns(openedTab, token) ||
         openedTab !== selectedTab()
       ) return;
       gURLBar.focus();
@@ -2475,13 +2678,8 @@
     cancelIconLabelReveal(event.target);
     // Retire the opening transaction before close callbacks can reuse its
     // partial row allocation. A stale RAF must not finish a closing tab.
-    if (sharedOpeningGeometry?.tab === event.target) {
-      scheduler.cancelFrame("opening-geometry");
-      newTabGeometryToken += 1;
-      clearOpeningContentOcclusion();
-      sharedOpeningGeometry = null;
-      document.documentElement.classList.remove("safari-v8-opening-clock");
-      newTabOpening = false;
+    if (newTabAdapter.tab === event.target) {
+      newTabAdapter.cancel(event.target);
     }
     // TabClose can precede Firefox's native closing attribute.
     // Retire every painted descendant before clearing address ownership.
@@ -2508,21 +2706,7 @@
 
   urlbar.classList.add("safari-v8-moving");
   ownEvent(tabs, "pointerdown", onTabPointerDown, true);
-  patchMethod(
-    nativeDragOwner,
-    "startTabDrag",
-    startTabDragWithLoneTabImage
-  );
-  patchMethod(
-    nativeDragOwner,
-    "_checkWithinPinnedContainerBounds",
-    checkPinnedBoundsWithoutCompactCue
-  );
-  ownEvent(tabs, "dragstart", startDraggedControls, true);
-  ownEvent(window, "dragover", forwardShelfDrag, true);
-  ownEvent(window, "drop", forwardShelfDrag, true);
-  ownEvent(window, "dragend", finishDraggedControls, true);
-  ownEvent(window, "drop", finishDraggedControls, true);
+  dragAdapter.install();
   ownEvent(tabs, "click", onTabClick);
   ownEvent(tabs, "TabSelect", onTabSelect);
   ownEvent(tabs, "TabOpen", onTabOpen);
@@ -2574,16 +2758,11 @@
      */
     lifecycle.disposed = true;
     scheduler.invalidate();
-    newTabGeometryToken += 1;
     shelfProbeAnimationToken += 1;
-    newTabOpening = false;
-    restoreTabCommandPending = false;
+    newTabAdapter.dispose();
 
     clearIconLabelReveals();
-    stopDraggedControls();
-    clearOpeningContentOcclusion();
-    sharedOpeningGeometry = null;
-    document.documentElement.classList.remove("safari-v8-opening-clock");
+    dragAdapter.stop();
     for (const [element, value] of noScrollFlexAttributes) {
       if (!element.hasAttribute("flex")) element.setAttribute("flex", value);
     }
