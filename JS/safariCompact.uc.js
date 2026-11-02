@@ -1220,45 +1220,6 @@
     }
   }
 
-  function plusButton() {
-    return document.querySelector("#new-tab-button");
-  }
-
-  function rightBoundary(anchorRight) {
-    const selectors = [
-      "#nav-bar-overflow-button",
-      "#unified-extensions-button",
-      "#downloads-button",
-      "#alltabs-button",
-      "#PanelUI-menu-button"
-    ];
-
-    const positions = selectors
-      .flatMap(selector => [...document.querySelectorAll(selector)])
-      .filter(element => {
-        const rect = element.getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return rect.width > 0 && rect.left > anchorRight &&
-          style.display !== "none" && style.visibility !== "hidden";
-      })
-      .map(element => element.getBoundingClientRect().left);
-
-    return positions.length
-      ? Math.min(...positions)
-      : window.innerWidth - safetyGap;
-  }
-
-  function visibleAllTabsButton() {
-    return [...document.querySelectorAll("#alltabs-button")].find(element => {
-      const rect = element.getBoundingClientRect();
-      const style = getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 &&
-        style.display !== "none" &&
-        style.visibility !== "hidden";
-    }) || null;
-  }
-
-
   function updatePlusPlacement() {
     if (lifecycle.disposed) return null;
     return updateNoScrollLayout();
