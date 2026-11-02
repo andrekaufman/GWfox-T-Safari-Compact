@@ -2018,7 +2018,6 @@
     }
 
     clearIconLabelReveals();
-    clearClosingCapsulePaints();
     // Capture painted content before retiring a superseded opening.
     const openingCount = [...gBrowser.tabs].filter(
       tab => !tab.hidden && !tab.closing && !tab.pinned
@@ -2105,127 +2104,9 @@
     waitForStableNewTabGeometry(openedTab, token);
   }
 
-  // Paint-only closing snapshot. Never retain a live input or native tab.
-  const closingCapsulePaints = new Set();
-
-  function clearClosingCapsulePaints() {
-    for (const paint of [...closingCapsulePaints]) paint.dispose();
-  }
-
-  function preserveClosingCapsule(tab) {
-    if (disposed) return;
-    const ordinary = [...gBrowser.tabs].filter(
-      item => !item.hidden && !item.closing && !item.pinned
-    );
-    if (!noScrollLayoutEnabled() || newTabOpening ||
-        tab !== selectedTab() || tab.pinned ||
-        ordinary.length < 2 || ordinary.length > 4 ||
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const source = visible && addressOwner === tab
-      ? inputContainer : tab.querySelector(".tab-stack");
-    if (!source) return;
-    const rect = source.getBoundingClientRect();
-    const tabRect = tab.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0 || tabRect.width <= 0) return;
-
-    // Freeze resolved paint before selection/ownership rules change.
-    // No IDs, event attributes, editable controls or accessibility duplicates.
-    const freeze = element => {
-      const style = getComputedStyle(element);
-      if (style.display === "none" || style.visibility === "hidden" ||
-          Number(style.opacity) === 0) return null;
-      const isInput = element === input ||
-        element.localName === "input" || element.localName === "textarea";
-      const copy = document.createElement(isInput ? "span" : "div");
-      for (const property of style) {
-        copy.style.setProperty(property, style.getPropertyValue(property), "important");
-      }
-      copy.style.setProperty("animation", "none", "important");
-      copy.style.setProperty("transition", "none", "important");
-      copy.style.setProperty("pointer-events", "none", "important");
-      if (isInput) {
-        copy.textContent = element.value || element.placeholder || "";
-        copy.style.setProperty("white-space", "nowrap", "important");
-        copy.style.setProperty("overflow", "hidden", "important");
-        if (!element.value) {
-          const placeholder = getComputedStyle(element, "::placeholder");
-          copy.style.setProperty("color", placeholder.color, "important");
-          copy.style.setProperty("opacity", placeholder.opacity, "important");
-        }
-      } else {
-        for (const child of element.childNodes) {
-          if (child.nodeType === 3) {
-            copy.appendChild(document.createTextNode(child.textContent));
-          } else if (child.nodeType === 1) {
-            const frozen = freeze(child);
-            if (frozen) copy.appendChild(frozen);
-          }
-        }
-      }
-      return copy;
-    };
-    const snapshot = freeze(source);
-    if (!snapshot) return;
-    const host = document.createElement("div");
-    host.setAttribute("aria-hidden", "true");
-    host.inert = true;
-    host.style.cssText = `
-      position:fixed!important;left:${rect.left}px!important;
-      top:${rect.top}px!important;width:${rect.width}px!important;
-      height:${rect.height}px!important;overflow:clip!important;
-      border-radius:15px!important;pointer-events:none!important;
-      z-index:2147482999!important;`;
-    snapshot.style.setProperty("position", "absolute", "important");
-    snapshot.style.setProperty("inset", "0 auto auto 0", "important");
-    snapshot.style.setProperty("margin", "0", "important");
-    snapshot.style.setProperty("width", `${rect.width}px`, "important");
-    snapshot.style.setProperty("height", `${rect.height}px`, "important");
-    snapshot.style.setProperty("min-width", "0", "important");
-    snapshot.style.setProperty("max-width", "none", "important");
-    host.appendChild(snapshot);
-    document.documentElement.appendChild(host);
-
-    let frameId = 0;
-    let paintDisposed = false;
-    const fade = host.animate(
-      [{opacity: 1}, {opacity: .85, offset: .35}, {opacity: 0}],
-      {duration: 300, easing: "ease-in-out", fill: "forwards"}
-    );
-    const paint = {
-      dispose() {
-        if (paintDisposed) return;
-        paintDisposed = true;
-        cancelAnimationFrame(frameId);
-        fade.cancel();
-        host.remove();
-        closingCapsulePaints.delete(paint);
-      }
-    };
-    closingCapsulePaints.add(paint);
-    const follow = () => {
-      if (disposed || paintDisposed) return;
-      if (!tab.isConnected) {
-        paint.dispose();
-        return;
-      }
-      const current = tab.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, current.width / tabRect.width));
-      host.style.setProperty("left",
-        `${rect.left + current.left - tabRect.left}px`, "important");
-      host.style.setProperty("top",
-        `${rect.top + current.top - tabRect.top}px`, "important");
-      host.style.setProperty("width", `${rect.width * ratio}px`, "important");
-      frameId = guardedFrame(follow);
-    };
-    frameId = guardedFrame(follow);
-    fade.finished.then(() => paint.dispose(), () => paint.dispose());
-  }
-
   function onTabClose(event) {
     if (disposed) return;
     cancelIconLabelReveal(event.target);
-    preserveClosingCapsule(event.target);
     // Retire the opening transaction before close callbacks can reuse its
     // partial row allocation. A stale RAF must not finish a closing tab.
     if (sharedOpeningGeometry?.tab === event.target) {
@@ -2332,7 +2213,6 @@
     window.removeEventListener("drop", forwardShelfDrag, true);
     window.removeEventListener("dragend", finishDraggedControls, true);
     window.removeEventListener("drop", finishDraggedControls, true);
-    clearClosingCapsulePaints();
     clearOpeningContentOcclusion();
     sharedOpeningGeometry = null;
     document.documentElement.classList.remove("safari-v8-opening-clock");
