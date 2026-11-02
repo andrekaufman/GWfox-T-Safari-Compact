@@ -58,15 +58,6 @@
   shelfProbe.id = "safari-v8-shelf-geometry-probe";
   shelfProbe.setAttribute("aria-hidden", "true");
 
-  /*
-   * The external Soft Light surface corrects the address material, but it
-   * also changes favicon colours. Render an untouched copy of the resolved
-   * glyph above the compositing surface.
-   */
-  const cleanGlyph = document.createElement("div");
-  cleanGlyph.id = "safari-v8-clean-glyph";
-  cleanGlyph.setAttribute("aria-hidden", "true");
-
   document.documentElement.appendChild(closeButton);
   document.documentElement.appendChild(reloadButton);
   /*
@@ -76,7 +67,6 @@
    * Fixed positioning retains the existing viewport geometry.
    */
   shelfPaintHost.prepend(shelfProbe);
-  document.documentElement.appendChild(cleanGlyph);
 
   let visible = false;
   let closeHover = false;
@@ -245,8 +235,7 @@
       plusButton(),
       shelfProbe,
       closeButton,
-      reloadButton,
-      cleanGlyph
+      reloadButton
     ].filter(element => {
       if (!element || !element.isConnected) return false;
 
@@ -1777,7 +1766,6 @@
   }
 
   function hideCleanGlyph() {
-    cleanGlyph.classList.remove("visible");
     glyph.style.removeProperty("opacity");
   }
 
@@ -1787,7 +1775,6 @@
      * Firefox's native glyph is the sole painted glyph. Animating it directly
      * prevents duplicate search artwork and destination shadows.
      */
-    cleanGlyph.classList.remove("visible");
     glyph.style.removeProperty("opacity");
 
     if (noScrollLayoutEnabled()) {
@@ -2217,7 +2204,6 @@
       "safari-v8-visible", "safari-v8-newtab-enter",
       "safari-v8-exact-close-hover"
     );
-    cleanGlyph.classList.remove("visible");
     glyphSlot.classList.remove("safari-v8-close-mask");
   }
 
@@ -3798,7 +3784,6 @@
     resizeObserver?.disconnect();
     glyphObserver?.disconnect();
     hideCleanGlyph();
-    cleanGlyph.remove();
     tabs.removeEventListener(
       "pointerdown",
       onTabPointerDown,

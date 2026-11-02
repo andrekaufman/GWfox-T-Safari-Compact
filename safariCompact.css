@@ -1598,54 +1598,6 @@
 
 
 
-/*
- * The Soft Light address surface alters favicon colours. This fixed copy
- * displays the already-resolved Firefox glyph with normal compositing above
- * the surface. Geometry comes from the real #trust-icon.
- */
-#safari-v8-clean-glyph {
-  position: fixed !important;
-
-  left: var(--clean-glyph-left) !important;
-  top: var(--clean-glyph-top) !important;
-
-  width: var(--clean-glyph-width) !important;
-  height: var(--clean-glyph-height) !important;
-
-  display: block !important;
-
-  background-image:
-    var(--clean-glyph-image)
-    !important;
-
-  background-repeat:
-    no-repeat
-    !important;
-
-  background-position:
-    center
-    !important;
-
-  background-size:
-    contain
-    !important;
-
-  opacity: 0 !important;
-  visibility: hidden !important;
-
-  filter: none !important;
-  backdrop-filter: none !important;
-  mix-blend-mode: normal !important;
-
-  pointer-events: none !important;
-  z-index: 2147483647 !important;
-}
-
-#safari-v8-clean-glyph.visible {
-  opacity: 0 !important;
-  visibility: hidden !important;
-}
-
 
 
 /*
@@ -1659,9 +1611,7 @@
 :root.safari-v8-navigation-shift
   #safari-v8-tab-reload,
 :root.safari-v8-navigation-shift
-  #safari-v8-exact-close,
-:root.safari-v8-navigation-shift
-  #safari-v8-clean-glyph {
+  #safari-v8-exact-close {
   transition: none !important;
 }
 
@@ -1727,10 +1677,6 @@
   background: var(--safari-v8-address-foreground) !important;
   background-color: var(--safari-v8-address-foreground) !important;
   box-shadow: inset 0 0 0 .5px var(--safari-v8-address-edge) !important;
-}
-
-#safari-v8-clean-glyph {
-  z-index: 2147483620 !important;
 }
 
 #safari-v8-exact-close,
@@ -2005,14 +1951,6 @@
   margin: 0 !important;
   translate: none !important;
   z-index: 2147482500 !important;
-}
-
-/* Keep the real glyph as the sole painted handoff element. */
-#safari-v8-clean-glyph,
-#safari-v8-clean-glyph.visible {
-  display: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
 }
 
 
