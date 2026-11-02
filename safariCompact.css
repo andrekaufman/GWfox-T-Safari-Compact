@@ -829,11 +829,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #tabbrowser-tabs[orient="horizontal"]
-    .tabbrowser-tab[busy]:not([pinned])
-    .tab-icon-stack::before {
-    animation: none !important;
-  }
+
 }
 
 
@@ -996,15 +992,7 @@
  * The shelf now lives inside #tabbrowser-tabs. Real tabs are always
  * above it, while inactive transparent tab backgrounds expose it.
  */
-#safari-v8-shelf-geometry-probe {
-  z-index: 0 !important;
-}
 
-#tabbrowser-tabs[orient="horizontal"]
-  .tabbrowser-tab {
-  position: relative !important;
-  z-index: 2 !important;
-}
 
 /*
  * Normal selected and direct-hover pills sit slightly inside the full
@@ -1035,23 +1023,7 @@
  * Address editing is a separate foreground surface. Keep it full-sized
  * and opaque white regardless of ATBC website colour or color-scheme.
  */
-#tabbrowser-tabs[orient="horizontal"]
-  .tabbrowser-tab.safari-v8-address
-  > .tab-stack
-  > .tab-background {
-  scale: 1 !important;
-}
 
-#urlbar.safari-v8-moving.safari-v8-visible
-  > #urlbar-background {
-  background: rgb(255, 255, 255) !important;
-  background-color: rgb(255, 255, 255) !important;
-  background-image: none !important;
-  opacity: 1 !important;
-  backdrop-filter: none !important;
-  filter: none !important;
-  mix-blend-mode: normal !important;
-}
 
 
 /* Shelf and real tabs share one stacking context. */
@@ -1442,10 +1414,6 @@
 }
 
 /* Fixed custom controls remain clickable above the input plane. */
-#safari-v8-exact-close,
-#safari-v8-tab-reload {
-  z-index: 2147483647 !important;
-}
 
 
 /*
@@ -2057,11 +2025,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root.safari-v8-no-scroll
-    #tabbrowser-tabs[orient="horizontal"]
-    #tabbrowser-arrowscrollbox {
-    transition: none !important;
-  }
+
 }
 
 /* ===== SAFARI NO-SCROLL OPENING GEOMETRY AUTHORITY ===== */
