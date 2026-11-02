@@ -86,9 +86,6 @@
   let resizeObserver = null;
   let shelfProbeAnimationFrame = 0;
   let shelfProbeAnimationToken = 0;
-  const shifted = new Set();
-
-  const preferredExpansion = 96;
   const safetyGap = 10;
 
   function selectedTab() {
@@ -147,27 +144,6 @@
     tabs.querySelectorAll(".safari-v8-address").forEach(tab => {
       tab.classList.remove("safari-v8-address");
     });
-  }
-
-  function clearShiftedElements() {
-    for (const element of shifted) {
-      element.classList.remove("safari-v8-pushed");
-      element.style.removeProperty("--safari-v8-push");
-    }
-    shifted.clear();
-
-    tabs.querySelectorAll(".safari-v8-source-expanded").forEach(tab => {
-      tab.classList.remove("safari-v8-source-expanded");
-      tab.style.removeProperty("--safari-v8-source-width");
-      tab.style.removeProperty("--safari-v8-source-expand");
-    });
-  }
-
-  function clearPush() {
-    document.documentElement.classList.remove("safari-v8-shared-opening");
-    clearShiftedElements();
-    urlbar.style.removeProperty("--safari-v8-expand");
-    urlbar.style.removeProperty("--safari-v8-left-shift");
   }
 
   let tabCloseTarget = null;
@@ -378,8 +354,6 @@
         urlbar.style.setProperty(name, value);
       }
     }
-    urlbar.style.setProperty("--safari-v8-expand", "0px");
-    urlbar.style.setProperty("--safari-v8-left-shift", "0px");
     // Keep the new capsule at its target width instead of growing its
     // text-bearing surface from the native tab's near-zero opening width.
     const opening = sharedOpeningGeometry;
@@ -840,13 +814,6 @@
   }
 
 
-  function applyPush() {
-    if (disposed) return;
-    updateNoScrollLayout();
-    urlbar.style.setProperty("--safari-v8-expand", "0px");
-    urlbar.style.setProperty("--safari-v8-left-shift", "0px");
-  }
-
   const searchGlyph =
     "chrome://global/skin/icons/search-glass.svg";
 
@@ -900,16 +867,26 @@
   function resolveGlyph() {
     if (isBlankNewTab() && input.value.length === 0) return searchGlyph;
 
+    /*
+     * Firefox restores the current URL and valid page-proxy state on the first
+     * Escape before it necessarily clears the selected suggestion row. Once
+     * the page state is valid, the current tab favicon must therefore outrank
+     * any stale prediction favicon still present in the view.
+     */
+    const pageState = inputContainer.getAttribute("pageproxystate") || "";
+    if (pageState === "valid") {
+      return selectedTabGlyph() || searchGlyph;
+    }
+
     const suggestion = selectedSuggestionGlyph();
     if (suggestion) return suggestion;
 
-    const pageState = inputContainer.getAttribute("pageproxystate") || "";
     const wholeValueSelected =
       input.value.length > 0 &&
       input.selectionStart === 0 &&
       input.selectionEnd === input.value.length;
 
-    if (pageState === "valid" || wholeValueSelected) {
+    if (wholeValueSelected) {
       return selectedTabGlyph() || searchGlyph;
     }
 
@@ -1023,7 +1000,6 @@
       updateAllSafariDisplayLabels();
       updatePlusPlacement();
       positionUrlbar();
-      applyPush();
       updateGlyph();
 
       /*
@@ -1099,7 +1075,7 @@
     if (noScrollLayoutEnabled()) cancelContentHandoff();
     setVisible(true);
     positionUrlbar();
-    applyPush();
+    updateNoScrollLayout();
     positionUrlbar();
     updateGlyph();
 
@@ -1155,7 +1131,6 @@
     if (noScrollLayoutEnabled()) cancelContentHandoff();
     hideCleanGlyph();
     setVisible(false);
-    clearPush();
     positionShelfGeometryProbe();
     followShelfGeometryAnimation();
 
@@ -1931,17 +1906,11 @@
     positionUrlbar();
     urlbar.classList.add("safari-v8-newtab-enter");
     void urlbar.getBoundingClientRect();
-    applyPush();
     document.documentElement.classList.remove(
       "safari-v8-opening-reserve"
     );
     positionUrlbar();
     positionShelfGeometryProbe();
-    // Commit shared geometry before ordinary transitions resume.
-    if (document.documentElement.classList.contains("safari-v8-shared-opening")) {
-      void urlbar.getBoundingClientRect();
-      document.documentElement.classList.remove("safari-v8-shared-opening");
-    }
     /*
      * Follow the same painted address/plus bounds throughout Safe Push.
      * A separate shelf FLIP would animate an already-moving target twice.
@@ -2000,119 +1969,6 @@
       return;
     }
 
-    let previousSignature = "";
-    let stableFrames = 0;
-    let observedFrames = 0;
-    let geometryChanged = false;
-    let sharedProgress = 0;
-    let sharedOpeningStarted = false;
-
-    const geometrySignature = () => {
-      const tabWidths = Array.from(gBrowser.tabs)
-        .filter(tab => !tab.hidden && !tab.closing)
-        .map(tab => tab.getBoundingClientRect().width.toFixed(2))
-        .join(",");
-
-      const plusRect = plusButton()?.getBoundingClientRect();
-      const plusLeft =
-        plusRect && plusRect.width > 0
-          ? plusRect.left.toFixed(2)
-          : "none";
-
-      const selectedRect = openedTab.getBoundingClientRect();
-
-      return [
-        tabWidths,
-        plusLeft,
-        selectedRect.left.toFixed(2),
-        selectedRect.right.toFixed(2)
-      ].join("|");
-    };
-
-    const sample = () => {
-      if (
-        token !== newTabGeometryToken ||
-        openedTab !== gBrowser.selectedTab ||
-        openedTab.closing ||
-        openedTab.hidden
-      ) {
-        return;
-      }
-
-      /*
-       * In ordinary layout, use the native min-width transition's already
-       * eased progress for Safe Push too. This avoids braking to zero and
-       * starting a second expansion curve after native opening.
-       * Overflow retains its established real-layout handoff for now.
-       */
-      const widthAnimation = openedTab.getAnimations().find(
-        animation => animation.transitionProperty === "min-width"
-      );
-      const progress = widthAnimation?.effect?.getComputedTiming().progress;
-      if (typeof progress === "number") {
-        sharedOpeningStarted = true;
-        sharedProgress = Math.max(sharedProgress, progress);
-      } else if (sharedOpeningStarted && openedTab.hasAttribute("fadein")) {
-        sharedProgress = 1;
-      }
-      if (sharedOpeningStarted) {
-        document.documentElement.classList.add("safari-v8-shared-opening");
-        applyPush(sharedProgress);
-      }
-
-      positionUrlbar();
-      positionShelfGeometryProbe();
-      applyGlyph(searchGlyph);
-
-      const signature = geometrySignature();
-      observedFrames += 1;
-
-      if (previousSignature && signature === previousSignature) {
-        stableFrames += 1;
-      } else {
-        if (previousSignature) geometryChanged = true;
-        stableFrames = 0;
-      }
-
-      previousSignature = signature;
-
-      /*
-       * Native max-width can keep transitioning after flex layout has
-       * already reached its final painted width. Do not wait for that
-       * invisible tail: after fadein and observed motion, one unchanged
-       * whole-row sample can hand off to synchronized address expansion.
-       * Native completion still owns motionless openings; versions without
-       * that API use the geometry-stability fallback.
-       */
-      const hasNativeCompletion =
-        typeof tabs.openAnimationFinished === "function";
-      const nativeOpeningFinished =
-        hasNativeCompletion && tabs.openAnimationFinished(openedTab);
-      const changedAndStable =
-        openedTab.hasAttribute("fadein") &&
-        !hasNativeCompletion &&
-        (!sharedOpeningStarted || sharedProgress >= 1) &&
-        geometryChanged && stableFrames >= 1;
-      const motionlessAndStable =
-        !geometryChanged && observedFrames >= 12 && stableFrames >= 8;
-
-      if (
-        nativeOpeningFinished ||
-        changedAndStable ||
-        (!hasNativeCompletion && (
-          motionlessAndStable ||
-          observedFrames >= 90
-        ))
-      ) {
-        newTabGeometryFrame = 0;
-        finishStableNewTab(openedTab, token);
-        return;
-      }
-
-      newTabGeometryFrame = guardedFrame(sample);
-    };
-
-    newTabGeometryFrame = guardedFrame(sample);
   }
 
 
@@ -2222,15 +2078,12 @@
      */
     hideCleanGlyph();
     urlbar.classList.remove("safari-v8-newtab-enter");
-    clearPush();
     // Reserve and anchor the plus before native opening starts painting.
     // Waiting until finishStableNewTab replayed an already-pushed position.
     updatePlusPlacement();
     updateSafariDisplayLabel(openedTab);
     setVisible(true);
 
-    urlbar.style.setProperty("--safari-v8-expand", "0px");
-    urlbar.style.setProperty("--safari-v8-left-shift", "0px");
 
     positionUrlbar();
     positionShelfGeometryProbe();
@@ -2563,8 +2416,12 @@
       "safari-v8-moving", "safari-v8-visible",
       "safari-v8-exact-close-hover", "safari-v8-newtab-enter"
     );
-    ["--safari-v8-left", "--safari-v8-top", "--safari-v8-width", "--safari-v8-height", "--safari-v8-expand", "--safari-v8-left-shift"]
-      .forEach(property => urlbar.style.removeProperty(property));
+    [
+      "--safari-v8-left",
+      "--safari-v8-top",
+      "--safari-v8-width",
+      "--safari-v8-height"
+    ].forEach(property => urlbar.style.removeProperty(property));
     urlbar.style.removeProperty("--safari-v8-source-scheme");
     urlbar.style.removeProperty("--safari-v8-pill-start");
     urlbar.style.removeProperty("--safari-v8-pill-end");
@@ -2580,7 +2437,6 @@
   };
   window.__safariCompactCleanup = cleanup;
 
-  clearPush();
   document.documentElement.classList.remove(
     "safari-v8-opening-reserve"
   );

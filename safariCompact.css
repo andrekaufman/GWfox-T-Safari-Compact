@@ -34,34 +34,14 @@
 #urlbar.safari-v8-moving.safari-v8-visible {
   position: fixed !important;
 
-  left:
-    calc(
-      var(--safari-v8-left) -
-      var(--safari-v8-left-shift, 0px)
-    )
-    !important;
+  left: var(--safari-v8-left) !important;
   top: var(--safari-v8-top) !important;
 
-  width:
-    calc(
-      var(--safari-v8-width) +
-      var(--safari-v8-expand, 0px)
-    )
-    !important;
+  width: var(--safari-v8-width) !important;
 
-  min-width:
-    calc(
-      var(--safari-v8-width) +
-      var(--safari-v8-expand, 0px)
-    )
-    !important;
+  min-width: var(--safari-v8-width) !important;
 
-  max-width:
-    calc(
-      var(--safari-v8-width) +
-      var(--safari-v8-expand, 0px)
-    )
-    !important;
+  max-width: var(--safari-v8-width) !important;
 
   height: var(--safari-v8-height) !important;
   min-height: var(--safari-v8-height) !important;
@@ -140,23 +120,6 @@
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
-}
-
-/*
- * Safe Push visually creates room for the wider address overlay
- * without changing Firefox's real tab widths or flex layout.
- */
-.tabbrowser-tab.safari-v8-pushed,
-#tabs-newtab-button.safari-v8-pushed,
-#new-tab-button.safari-v8-pushed {
-  translate:
-    var(--safari-v8-push, 0px)
-    0
-    !important;
-
-  transition:
-    translate 100ms cubic-bezier(.2, .8, .2, 1)
-    !important;
 }
 
 /*
@@ -1648,26 +1611,6 @@
 }
 
 /*
- * In overflow mode the hidden selected source tab expands in real layout.
- * Firefox therefore pushes neighbouring tabs and keeps the result clipped
- * inside its scrollport instead of translating content over toolbar icons.
- */
-#tabbrowser-tabs[orient="horizontal"][overflow]
-  .tabbrowser-tab.safari-v8-source-expanded {
-  --safari-v8-expanded-width:
-    calc(
-      var(--safari-v8-source-width) +
-      var(--safari-v8-source-expand, 0px)
-    );
-
-  flex: 0 0 var(--safari-v8-expanded-width) !important;
-  width: var(--safari-v8-expanded-width) !important;
-  min-width: var(--safari-v8-expanded-width) !important;
-  max-width: var(--safari-v8-expanded-width) !important;
-  transition: none !important;
-}
-
-/*
  * Compressed inactive tabs permanently reserve a leading close-control slot.
  * Favicon/title geometry is identical before and during hover.
  */
@@ -1786,17 +1729,6 @@
   border-end-end-radius: 0 !important;
 }
 
-/*
- * Firefox snaps wheel scrolling to tab boundaries. The selected source tab is
- * intentionally wider while its address surface is open; excluding only that
- * temporary layout proxy from snap targets prevents an end-adjacent wheel
- * step from jumping by the expanded tab's full width.
- */
-#tabbrowser-tabs[orient="horizontal"][overflow]
-  .tabbrowser-tab.safari-v8-source-expanded {
-  scroll-snap-align: none !important;
-}
-
 
 /*
  * GWfox-T can inject a search-glass pseudo-element into the input container.
@@ -1815,23 +1747,6 @@
   mask-image: none !important;
 }
 
-
-/* ===== SAFARI SHARED NATIVE OPENING ===== */
-/*
- * JavaScript samples native eased opening progress. Do not add another
- * transition to those per-frame width and push values.
- */
-:root.safari-v8-address-active.safari-v8-shared-opening
-  #urlbar-container:has(#urlbar)
-  #urlbar.safari-v8-moving {
-  transition: opacity 105ms ease-out !important;
-}
-
-:root.safari-v8-shared-opening .tabbrowser-tab.safari-v8-pushed,
-:root.safari-v8-shared-opening #tabs-newtab-button.safari-v8-pushed,
-:root.safari-v8-shared-opening #new-tab-button.safari-v8-pushed {
-  transition: none !important;
-}
 
 /* ===== SAFARI NO-SCROLL LAYOUT FOUNDATION ===== */
 /*
