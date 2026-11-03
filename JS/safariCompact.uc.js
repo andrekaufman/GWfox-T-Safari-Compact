@@ -173,11 +173,10 @@
   document.documentElement.appendChild(closeButton);
   document.documentElement.appendChild(reloadButton);
   /*
-   * Keep the shelf below both address and native tab surfaces.
-   * TabsToolbar paints above nav-bar; placing the shelf inside TabsToolbar
-   * also tinted the address field underneath that toolbar.
-   * Fixed positioning retains the existing viewport geometry.
-   */
+ * Keep the shelf below both address and native tab surfaces. TabsToolbar
+ * paints above the nav bar, so the shelf belongs inside #nav-bar. Fixed
+ * positioning keeps its viewport geometry stable.
+ */
   shelfPaintHost.prepend(shelfProbe);
 
   let visible = false;
@@ -932,8 +931,8 @@
 
   let previousNavigationState = null;
 
-  // Design targets, not measured Safari constants. Keep ordinary shares
-  // unchanged until compression requires a readable selected tab.
+  // Keep ordinary shares unchanged until compression requires a readable
+  // selected tab.
   function noScrollTabAllocation(rowWidth, count, hasActive) {
     const equal = rowWidth / count;
     // Preserve counts 1-4, then shrink monotonically to the dense target.
@@ -976,7 +975,7 @@
     for (const {tab, icon, label, delta, opacity} of destinations) {
       if (!Number.isFinite(delta)) continue;
       const baseOpacity = Number.isFinite(opacity) ? opacity : 1;
-      // Design calibration, not a measured Safari duration.
+
       const timing = {
         duration: 220, easing: "cubic-bezier(.2, .8, .2, 1)"
       };
@@ -1432,9 +1431,8 @@
     if (lifecycle.disposed) return;
     scheduler.scheduleFrame("render", () => {
       /*
-       * Firefox owns the complete native new-tab flex animation. Rendering the
-       * address transaction from ResizeObserver or focus events during that
-       * interval was the source of the frame-by-frame plus-button movement.
+       * Firefox owns the complete native new-tab flex animation. Ignore
+       * ResizeObserver and focus rendering during it to keep the plus button stable.
        */
       if (newTabAdapter.opening) return;
 
@@ -1488,8 +1486,7 @@
 
     /*
      * Cmd+L on an address surface already owned by this tab is focus-only.
-     * Re-measuring or reapplying expansion here made every invocation able to
-     * change the source width and the new-tab button position.
+     * Reuse its current geometry so the source width and plus position stay stable.
      */
     if (addressState.phase !== "idle" && addressState.owner === tab) {
       // An already focused, fully selected address needs no second transaction.
@@ -2435,9 +2432,8 @@
     }
 
     /*
-     * Commit the final expansion once, after Firefox's native tab width has
-     * stabilized. Retain the proven pre-shortening expansion, plus placement,
-     * shelf and ownership logic unchanged.
+     * Commit the final expansion once Firefox's native tab width has stabilized.
+     * Use the established expansion, plus placement, shelf, and ownership logic.
      */
     if (!newTabAdapter.complete(openedTab, token)) return;
     // TabOpen can precede native selection: its initial address owner may
@@ -2588,15 +2584,15 @@
     const token =
       newTabAdapter.begin(openedTab, openingGeometryState);
     /*
-     * Replace Firefox's native "Ny flik" face inside TabOpen, before the next
+     * Replace Firefox's native new-tab face inside TabOpen, before the next
      * painted frame. The real URL field follows the native opening width with
      * zero extension; the recovered expansion and plus-button geometry are
      * committed only when the row is stable.
      */
     hideCleanGlyph();
     urlbar.classList.remove("safari-v8-newtab-enter");
-    // Reserve and anchor the plus before native opening starts painting.
-    // Waiting until finishStableNewTab replayed an already-pushed position.
+    // Reserve and anchor the plus before native opening starts painting so its
+    // position is applied once.
     updatePlusPlacement();
     updateSafariDisplayLabel(openedTab);
     setVisible(true, openedTab, "opening", token);

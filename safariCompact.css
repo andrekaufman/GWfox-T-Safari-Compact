@@ -505,7 +505,7 @@
 }
 
 /*
- * Address mode remains fully owned by the proven URL overlay.
+ * Address mode is fully owned by the URL overlay.
  * Never paint tab material underneath it.
  */
 #tabbrowser-tabs[orient="horizontal"]
@@ -913,8 +913,8 @@
 
 
 /*
- * The shelf now lives inside #tabbrowser-tabs. Real tabs are always
- * above it, while inactive transparent tab backgrounds expose it.
+ * The shelf lives inside #tabbrowser-tabs. Real tabs are always above it,
+ * while inactive transparent tab backgrounds expose it.
  */
 
 
@@ -1150,9 +1150,8 @@
 
 
 /*
- * The outer URL box and shelf keep their proven 36 px geometry. Only the
- * painted white foreground surface is inset, giving the same grey reveal on
- * all four sides while the extra expansion remains horizontal.
+ * The outer URL box and shelf use 36px geometry. Only the white foreground
+ * surface is inset, giving an even grey reveal while expansion stays horizontal.
  */
 #urlbar.safari-v8-moving.safari-v8-visible
   > .urlbar-background,
@@ -1338,9 +1337,8 @@
 
 
 /*
- * Stable selection fallback. Black selected text matches Safari.
- * Markeringsfärgen finjusteras separat efter att den stabila pillen
- * har återställts.
+ * Black selected text is the stable fallback.
+ * Selection color is calibrated separately from the pill material.
  */
 #urlbar.safari-v8-moving.safari-v8-visible
   .urlbar-input::selection {
@@ -1999,18 +1997,17 @@
 
 /* ===== SAFARI FIXED NO-SCROLL PILL INSETS ===== */
 /*
- * Percentage-based horizontal scaling made the shelf reveal grow with tab
- * width. Keep the existing vertical inset, but use a fixed horizontal inset.
- * Only the painted background changes; content and hit boxes stay untouched.
+ * A fixed horizontal inset gives the shelf a consistent reveal at every tab
+ * width. The vertical inset, content, and hit boxes remain unchanged.
  */
 :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox
   .tabbrowser-tab:not([pinned], .safari-v8-address)
   > .tab-stack > .tab-background {
-  /* Real inset geometry keeps circular endcaps circular.
-   * The 44px tab contains a 36px shelf (4px inset) and a 30px pill
-   * (7px inset). Scaling only Y instead made the endcaps elliptical.
-   */
+/* Real inset geometry keeps circular endcaps circular.
+ * The 44px tab contains a 36px shelf at a 4px inset and a 30px pill
+ * at a 7px inset.
+ */
   scale: none !important;
   transform: none !important;
   align-self: center !important;
@@ -2112,11 +2109,9 @@
   mix-blend-mode: normal !important;
 }
 
-/* Shared reference-inspired active glass finish.
- * Optical refinement only: preserve capsule geometry and hit testing.
- * Dark material is translucent; both states share the same paint recipe.
- * Directional inset reflections suggest a curved glass edge without
- * changing the verified outer spacing or introducing backdrop filters.
+/* Selected and editing states share the same active glass finish.
+ * Dark material is translucent. Directional inset reflections suggest a
+ * curved glass edge within the existing capsule geometry and hit testing.
  */
 :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox
@@ -2391,9 +2386,7 @@
 
 /*
  * The toolbar plus is a sibling of tabbrowser-tabs, not part of its row.
- * Reserve its 36px button and two 8px margins in actual flex allocation.
- * Previously the tab container consumed the entire toolbar and pushed
- * the plus onto the extensions control.
+ * Reserve its 36px button and two 8px margins in the flex allocation.
  */
 :root.safari-v8-no-scroll
   #TabsToolbar-customization-target {
@@ -2426,9 +2419,9 @@
   #nav-bar #unified-extensions-button:not([hidden]) {
   margin-inline-start: 0 !important;
   border-radius: 0 !important;
-  /* The plus already clips its shared edge. Clipping this edge too
-   * exposed a 1.5px strip of toolbar between the two painted surfaces.
-   */
+/* The plus already clips its shared edge. Leave this edge unclipped
+ * to cover the 1.5px toolbar seam between the painted surfaces.
+ */
   clip-path: inset(-20px 1.5px -20px 0);
 }
 
@@ -2440,11 +2433,8 @@
 
 /* ===== SAFARI CAPSULE SHOULDER CALIBRATION ===== */
 /*
- * Inner contour trial informed by normalized screenshot edge positions:
- * shorten the inner horizontal shoulder to 15px at the existing 30px height.
- * Keep outer shelf/panel calibration unchanged pending separate measurement.
- * This does not establish Apple's exact contour.
- * Keep paint recipes, dimensions, insets and hit targets unchanged.
+ * Use a 15px inner horizontal shoulder at the existing 30px height.
+ * Keep the outer shelf geometry, insets, paint, and hit targets unchanged.
  */
 :root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"]
   #tabbrowser-arrowscrollbox
@@ -2475,11 +2465,9 @@
 
 /* ===== SAFARI SEARCH GLYPH CONTEXT PAINT ===== */
 /*
- * The native search SVG requires context-fill. The favicon-preservation
- * rule intentionally disables it, so opt in only for the resolved search
- * glyph. Reference screenshot stroke plateaus: light 122/122/123,
- * dark 163/163/165. These are screenshot-informed, not universal Safari tokens.
- * Preserve icon geometry, opacity, favicon colors and close-slot masking.
+ * The native search SVG requires context-fill. The favicon-preservation rule
+ * disables it, so enable it only for the resolved search glyph.
+ * Preserve icon geometry, opacity, favicon colors, and close-slot masking.
  */
 #urlbar.safari-v8-moving.safari-v8-visible
   #trust-icon.safari-v8-search-glyph {
@@ -2554,7 +2542,7 @@
 /*
  * A badge is a descendant of the hover stack, not part of its background.
  * Round the hover background without clipping the badge's painted overflow.
- * Keep the approved 29px hover geometry and native badge positioning.
+ * Keep the 29px hover geometry and native badge positioning.
  */
 :root.safari-v8-no-scroll:not([customizing]) #nav-bar #nav-bar-customization-target
   #urlbar-container ~ .toolbarbutton-1:not(#fxa-toolbar-menu-button)
@@ -2666,7 +2654,7 @@
 }
 
 /* ===== SAFARI OPENING CONTENT OCCLUSION ===== */
-/* Hide only content covered by the capsule, not the approved glass material.
+/* Hide only content covered by the capsule, not the glass material.
  * A hard mask avoids blending two independently moving text runs.
  */
 :root.safari-v8-no-scroll.safari-v8-opening-clock
@@ -2681,10 +2669,9 @@
   ) !important;
 }
 
-/* Design trial, not a measured Safari duration.
- * During opening, existing tabs must not compress on the shorter closing
+/* During opening, existing tabs must not compress on the shorter closing
  * curve while the new tab is still growing. Match both native properties
- * across participating tabs; retain Firefox transition bookkeeping.
+ * across participating tabs to retain Firefox transition bookkeeping.
  * Closing tabs and reduced motion keep their existing rules.
  */
 @media (prefers-reduced-motion: no-preference) {
@@ -2735,8 +2722,8 @@
 }
 
 /* ===== SAFARI NAVIGATION CAPSULE CONTOUR PARITY ===== */
-/* Reuse the approved trailing capsule paint, without changing geometry,
- * arrow icons, the forward-button separator or inactive-window paint.
+/* Reuse the trailing capsule paint without changing geometry,
+ * arrow icons, the forward-button separator, or inactive-window paint.
  */
 :root.safari-v8-no-scroll:not([customizing]):not(:-moz-window-inactive)
   #nav-bar #back-button:has(+ #forward-button) {
