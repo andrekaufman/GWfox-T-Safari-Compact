@@ -2961,3 +2961,19 @@
   .tab-label[data-safari-display-label="Ny flik"]::after {
   color: light-dark(rgb(72, 72, 74), rgb(218, 218, 220)) !important;
 }
+
+/* Match the leading exterior gap to the established trailing gap.
+ * The base rule positions the toolbar at anchor(right) + 3px.
+ */
+:root.safari-v8-no-scroll #TabsToolbar {
+  left: calc(anchor(right) - 3.5px) !important;
+}
+
+/* When navigation is present, remove its excess leading reservation without
+ * changing the capsule's trailing spacing or transition geometry.
+ */
+:root.safari-v8-no-scroll:not([customizing])
+  #nav-bar #back-button:has(+ #forward-button) {
+  margin-inline-start: 1.5px !important;
+  margin-inline-end: 8px !important;
+}
