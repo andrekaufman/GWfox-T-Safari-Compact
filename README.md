@@ -79,10 +79,8 @@ However, Adaptive Tab Bar Colour is supported. Set gwt.atbc to true in about:con
 
 ## Known issues
 
-- Slight gap in left side of shelf
-- Slight dark flash at startup
-- Text in inactive tabs may be slight off-center when both front/back buttons are present
-- Opening link from external app may temporarily render the URL invisible or render the tab in the wrong color
+- Text in inactive tabs may be very slightly off-center when both front/back buttons are present
+- New tab-animation needs further polish
 
 ## Credits
 
