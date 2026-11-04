@@ -877,6 +877,17 @@
     for (const content of retained) openingContentMasks.add(content);
   }
 
+  function syncHighlightedColorState(tab = selectedTab()) {
+    if (!tab) return;
+    const sourceContent = tab.querySelector(".tab-content") || tab;
+    setStyleProperty(
+      urlbar,
+      "--safari-v8-source-scheme",
+      getComputedStyle(sourceContent).colorScheme
+    );
+    updateControlColor(tab);
+  }
+
   function positionNoScrollAddress(geometry = null) {
     geometry ||= updateNoScrollLayout();
     const tab = selectedTab();
@@ -884,12 +895,7 @@
 
     const metric = geometry?.tabGeometry.find(item => item.tab === tab);
     const rect = metric?.rect || tab.getBoundingClientRect();
-    const sourceContent = tab.querySelector(".tab-content") || tab;
-    setStyleProperty(
-      urlbar,
-      "--safari-v8-source-scheme",
-      getComputedStyle(sourceContent).colorScheme
-    );
+    syncHighlightedColorState(tab);
 
     for (const name of ["--safari-v8-pill-start", "--safari-v8-pill-end"]) {
       setStyleProperty(urlbar, name, tab.style.getPropertyValue(name));
@@ -2690,6 +2696,28 @@
 
   ownEvent(tabs, "TabAttrModified", updateGlyph);
   ownEvent(tabs, "TabAttrModified", onSafariTabAttrModified);
+
+  /*
+   * ATBC publishes effective browser-chrome colours on Firefox's window/theme
+   * owners. Refresh the copied source scheme in the same mutation checkpoint;
+   * this changes paint only and never touches focus, selection, or URL state.
+   */
+  const themeColorObserver = ownObserver(new MutationObserver(() => {
+    if (lifecycle.disposed) return;
+    syncHighlightedColorState();
+  }));
+  const themeColorOwners = [
+    document.documentElement,
+    document.querySelector("#navigator-toolbox")
+  ].filter(Boolean);
+  for (const owner of themeColorOwners) {
+    themeColorObserver.observe(owner, {
+      attributes: true,
+      attributeFilter: [
+        "style", "class", "lwtheme", "lwthemetextcolor", "brighttext"
+      ]
+    });
+  }
 
   const resizeObserver = ownObserver(new ResizeObserver(render));
   resizeObserver.observe(toolbar);
