@@ -2318,6 +2318,17 @@
   transition: none !important;
 }
 
+/*
+ * Safari paints a restrained circular halo around the 13px close disc.
+ * Keep the glyph and hit target unchanged; only the disc's hover paint grows.
+ */
+#safari-v8-exact-close.visible:hover::before {
+  box-shadow: 0 0 0 4px light-dark(
+    rgba(60, 60, 67, .06),
+    rgba(255, 255, 255, .06)
+  ) !important;
+}
+
 #safari-v8-tab-reload::before {
   content: "" !important;
   position: absolute !important;
