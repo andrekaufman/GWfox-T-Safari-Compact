@@ -2977,3 +2977,10 @@
   margin-inline-start: 1.5px !important;
   margin-inline-end: 8px !important;
 }
+
+/* Keep the shelf height stable when only one tab remains.
+ * The inherited theme otherwise applies this minimum only to multi-tab rows.
+ */
+:root.safari-v8-no-scroll #tabbrowser-tabs[orient="horizontal"] {
+  min-height: 38px !important;
+}
