@@ -63,8 +63,8 @@ Safari Compact is currently only tested on Firefox on macOS 27 Golden Gate.
 | :--- | :--- |
 | `toolkit.legacyUserProfileCustomizations.stylesheets` | `true` |
 | `svg.context-properties.content.enabled` | `true` |
-| `browser.nova.enabled` | `false` |
-| `browser.newtabpage.activity-stream.nova.enabled` | `false` |
+| `browser.nova.enabled` | `true` |
+| `browser.newtabpage.activity-stream.nova.enabled` | `true` |
 | `userChromeJS.enabled` | `true` |
 | `gwt.oneliner` | `true` |
 

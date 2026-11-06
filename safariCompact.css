@@ -2351,6 +2351,14 @@
   .tabbrowser-tab:is([selected], [visuallyselected]):not(
     [pinned], .safari-v8-address
   ):hover > .tab-stack > .tab-background,
+:root.safari-v8-no-scroll:has(
+  #safari-v8-exact-close.visible:hover,
+  #safari-v8-tab-reload.visible:hover
+) #tabbrowser-tabs[orient="horizontal"]
+  #tabbrowser-arrowscrollbox
+  .tabbrowser-tab:is([selected], [visuallyselected]):not(
+    [pinned], .safari-v8-address
+  ) > .tab-stack > .tab-background,
 :root.safari-v8-no-scroll
   #urlbar.safari-v8-moving.safari-v8-visible:hover > .urlbar-input-container,
 :root.safari-v8-no-scroll:has(
