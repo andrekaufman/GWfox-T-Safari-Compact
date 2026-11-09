@@ -393,12 +393,13 @@ toolbarbutton.bookmark-item:not(.subviewbutton) {
   display: none !important;
 }
 #PanelUI-menu-button {
-  border-radius: 50% !important;
-  width: 36px !important;
+  border-radius: 0 19.5px 19.5px 0 / 0 18px 18px 0 !important;
+  margin-inline-start: -1.5px !important;
+  width: 37.5px !important;
   height: 36px !important;
-  clip-path: inset(-20px);
+  clip-path: inset(-20px -20px -20px 1.5px);
 > .toolbarbutton-badge-stack {
-  padding: 9px !important;
+  padding: 5.5px !important;
 }
 }
 }
