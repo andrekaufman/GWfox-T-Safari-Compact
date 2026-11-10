@@ -490,6 +490,22 @@
     !important;
 }
 
+/*
+ * Fixed close controls live outside their tab. Preserve the inactive hover
+ * material while the control retains ownership of that tab.
+ */
+#tabbrowser-tabs[orient="horizontal"]
+  .tabbrowser-tab.safari-v8-close-owner:not(
+    [pinned],
+    [selected],
+    [visuallyselected],
+    .safari-v8-address
+  )
+  > .tab-stack
+  > .tab-background {
+  background: var(--safari-v8-inactive-tab-hover) !important;
+}
+
 /* Active tab uses its existing pill geometry with a white material. */
 :root:not(:has(#urlbar.safari-v8-visible))
   #tabbrowser-tabs[orient="horizontal"]
@@ -2323,9 +2339,9 @@
  * Keep the glyph and hit target unchanged; only the disc's hover paint grows.
  */
 #safari-v8-exact-close.visible:hover::before {
-  box-shadow: 0 0 0 4px light-dark(
-    rgba(60, 60, 67, .06),
-    rgba(255, 255, 255, .06)
+  box-shadow: 0 0 0 3px light-dark(
+    rgba(60, 60, 67, .035),
+    rgba(255, 255, 255, .035)
   ) !important;
 }
 

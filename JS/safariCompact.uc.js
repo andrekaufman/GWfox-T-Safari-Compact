@@ -505,7 +505,10 @@
     closeButton.classList.remove("visible");
     urlbar.classList.remove("safari-v8-exact-close-hover");
     glyphSlot.classList.remove("safari-v8-close-mask");
-    tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
+    tabCloseTarget?.classList.remove(
+      "safari-v8-close-over-icon",
+      "safari-v8-close-owner"
+    );
 
     /*
      * The clean glyph is a separate root-level copy. Restore it only after
@@ -1704,9 +1707,13 @@
     }
 
     if (tabCloseTarget !== tab) {
-      tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
+      tabCloseTarget?.classList.remove(
+        "safari-v8-close-over-icon",
+        "safari-v8-close-owner"
+      );
     }
     tabCloseTarget = tab;
+    tabCloseTarget?.classList.add("safari-v8-close-owner");
     closeHover = true;
     controlState.closeVisible = true;
     positionCloseButton();
@@ -2516,6 +2523,14 @@
   // Native preload replenishment is lazy, cached and capability-checked
   // by the adapter. Failure leaves Firefox's native policy untouched.
 
+  function reconcileOpenedTab(openedTab) {
+    if (!validTabOwner(openedTab)) return;
+    updateNoScrollLayout();
+    updateSafariDisplayLabel(openedTab);
+    updateAllSafariDisplayLabels();
+    settle();
+  }
+
   function onTabOpen(event) {
     if (lifecycle.disposed) return;
 
@@ -2530,16 +2545,25 @@
      */
     if (!gBrowserInit.delayedStartupFinished || restoringClosedTab) {
       retireAddressPresentation();
-      scheduler.scheduleMicrotask(() => {
-        if (!openedTab.isConnected || openedTab.closing) return;
-        updateNoScrollLayout();
-        updateSafariDisplayLabel(openedTab);
-        updateAllSafariDisplayLabels();
-        settle();
-      });
+      scheduler.scheduleMicrotask(() => reconcileOpenedTab(openedTab));
       return;
     }
 
+    /*
+     * Firefox commits foreground selection after dispatching TabOpen. Classify
+     * the opening later in the same event turn, before the next paint.
+     */
+    scheduler.scheduleMicrotask(() => {
+      if (!validTabOwner(openedTab)) return;
+      if (openedTab !== selectedTab()) {
+        reconcileOpenedTab(openedTab);
+        return;
+      }
+      startForegroundTabOpen(openedTab);
+    });
+  }
+
+  function startForegroundTabOpen(openedTab) {
     clearIconLabelReveals();
     // Capture painted content before retiring a superseded opening.
     const openingCount = [...gBrowser.tabs].filter(
@@ -2561,8 +2585,7 @@
     cancelContentHandoff();
     scheduler.cancelFrame("opening-geometry");
 
-    // TabOpen precedes native load/selection initialization. Do not create
-    // another browser reentrantly inside that unfinished transaction.
+    // Replenish preload only after Firefox finishes the opening transaction.
     scheduler.scheduleMicrotask(() => newTabAdapter.replenish(openedTab));
     newTabAdapter.cancel();
     let openingGeometryState = null;
@@ -2608,9 +2631,7 @@
     positionShelfGeometryProbe(openingGeometry?.snapshot);
     applyGlyph(searchGlyph);
 
-    // TabOpen precedes native selection and browser-load initialization.
-    // Focus only after the transaction identifies the still-current
-    // opening tab.
+    // Focus only while this remains the selected opening transaction.
     scheduler.scheduleMicrotask(() => {
       if (
         !newTabAdapter.owns(openedTab, token) ||
