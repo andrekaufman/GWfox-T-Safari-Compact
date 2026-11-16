@@ -493,6 +493,17 @@
   let tabCloseTarget = null;
   let selectedTabClickCandidate = null;
 
+  function setTabCloseTarget(tab) {
+    if (tabCloseTarget === tab) {
+      return;
+    }
+    tabCloseTarget?.classList.remove(
+      "safari-v8-close-over-icon",
+      "safari-v8-close-owner"
+    );
+    tabCloseTarget = tab;
+  }
+
   /*
    * Firefox shifts the complete tab strip by about 52 px when the selected
    * tab changes between having and not having navigation history.
@@ -1706,13 +1717,7 @@
       return;
     }
 
-    if (tabCloseTarget !== tab) {
-      tabCloseTarget?.classList.remove(
-        "safari-v8-close-over-icon",
-        "safari-v8-close-owner"
-      );
-    }
-    tabCloseTarget = tab;
+    setTabCloseTarget(tab);
     tabCloseTarget?.classList.add("safari-v8-close-owner");
     closeHover = true;
     controlState.closeVisible = true;
@@ -1866,7 +1871,7 @@
 
       stop();
       state.owner = tab;
-      tabCloseTarget = tab;
+      setTabCloseTarget(tab);
       setControlOwner(tab, "drag");
 
       const row = document.querySelector("#tabbrowser-arrowscrollbox");
@@ -2161,7 +2166,7 @@
           tabCloseTarget?.classList.remove(
             "safari-v8-close-over-icon"
           );
-          tabCloseTarget = hoveredTab;
+          setTabCloseTarget(hoveredTab);
         }
 
         showClose(tabCloseTarget);
@@ -2188,7 +2193,7 @@
        * Inside the address surface, controls target the selected tab.
        */
       if (insideUrlbar) {
-        tabCloseTarget = null;
+        setTabCloseTarget(null);
         const leading = event.clientX <= rect.left + 40;
 
         if (noScrollLayoutEnabled() || leading) {
@@ -2204,14 +2209,14 @@
       hideClose();
       hideReload();
       tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
-      tabCloseTarget = null;
+      setTabCloseTarget(null);
       clearControlOwner();
       return;
     }
 
     if (validTab && hoveredTab !== tabCloseTarget) {
       tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
-      tabCloseTarget = hoveredTab;
+      setTabCloseTarget(hoveredTab);
     }
 
     const keep = Boolean(
@@ -2227,7 +2232,7 @@
     hideClose();
     hideReload();
     tabCloseTarget?.classList.remove("safari-v8-close-over-icon");
-    tabCloseTarget = null;
+    setTabCloseTarget(null);
     clearControlOwner();
   }
 
@@ -2264,7 +2269,7 @@
         !closeButton.classList.contains("visible")) return;
 
     hideClose();
-    tabCloseTarget = null;
+    setTabCloseTarget(null);
     clearControlOwner();
     gBrowser.removeTab(tab, { animate: true, byMouse: true });
   }
@@ -2581,7 +2586,7 @@
     // transaction while geometry is changing.
     hideClose();
     hideReload();
-    tabCloseTarget = null;
+    setTabCloseTarget(null);
     cancelContentHandoff();
     scheduler.cancelFrame("opening-geometry");
 
