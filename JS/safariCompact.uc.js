@@ -2131,8 +2131,26 @@
     if (reloadHover) reloadButton.classList.add("visible");
   }
 
+  let windowActive = document.hasFocus();
+
+  function clearPointerControls() {
+    hideClose();
+    hideReload();
+    setTabCloseTarget(null);
+    clearControlOwner();
+  }
+
+  function onWindowDeactivate() {
+    windowActive = false;
+    clearPointerControls();
+  }
+
+  function onWindowActivate() {
+    windowActive = true;
+  }
+
   function onPointerMove(event) {
-    if (lifecycle.disposed || !event.isTrusted ||
+    if (lifecycle.disposed || !windowActive || !event.isTrusted ||
         event.type !== "pointermove") return;
     // Drag ownership must not follow tabs crossed by the pointer.
     if (dragAdapter.owner) return;
@@ -2691,6 +2709,10 @@
   layoutEvents.forEach(name => ownEvent(tabs, name, settle));
   ownEvent(document, "focusin", onFocusIn, true);
   ownEvent(document, "focusout", onFocusOut, true);
+  ownEvent(window, "blur", onWindowDeactivate, true);
+  ownEvent(window, "focus", onWindowActivate, true);
+  ownEvent(window, "deactivate", onWindowDeactivate, true);
+  ownEvent(window, "activate", onWindowActivate, true);
   ownEvent(document, "pointermove", onPointerMove, true);
   ownEvent(window, "keydown", onKeyDown, true);
   ownEvent(window, "resize", settle);
