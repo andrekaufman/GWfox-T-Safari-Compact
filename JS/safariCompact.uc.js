@@ -1912,7 +1912,7 @@
         };
 
         clipControl(closeButton, rect.left + 9);
-        clipControl(reloadButton, rect.right - 32);
+        clipControl(reloadButton, rect.right - 27);
 
         const setCoordinate = (element, name, value) => {
           const next = `${value}px`;
@@ -1931,7 +1931,7 @@
         }
         if (reloadHover) {
           if (owner === selectedTab()) {
-            setCoordinate(reloadButton, "--reload-left", rect.right - 32);
+            setCoordinate(reloadButton, "--reload-left", rect.right - 27);
             setCoordinate(
               reloadButton,
               "--reload-top",
@@ -2097,7 +2097,7 @@
 
     updateControlColor();
     const size = 18;
-    const centerX = rect.right - 23;
+    const centerX = rect.right - 18;
     const centerY = rect.top + rect.height / 2;
     setPixelProperty(
       reloadButton,
