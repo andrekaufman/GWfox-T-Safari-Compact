@@ -1499,7 +1499,7 @@
     });
   }
 
-  function openUrlbar() {
+  function openUrlbar({ preserveClose = false } = {}) {
     if (lifecycle.disposed) return;
     const tab = selectedTab();
     if (!validTabOwner(tab, { selected: true })) return;
@@ -1537,6 +1537,7 @@
     updateNoScrollLayout();
     positionUrlbar();
     updateGlyph();
+    if (preserveClose) showClose();
 
     if (noScrollLayoutEnabled() && contentOrigin?.width > 0) {
       const destination = glyph.getBoundingClientRect();
@@ -1562,6 +1563,7 @@
       gURLBar.select();
       revealSelectedAddressFromStart();
       updateGlyph();
+      if (preserveClose) showClose();
     });
   }
 
@@ -2351,7 +2353,9 @@
       return;
     }
 
-    if (wasAlreadySelected && !visible) openUrlbar();
+    if (wasAlreadySelected && !visible) {
+      openUrlbar({ preserveClose: closeHover });
+    }
   }
 
   function onTabSelect() {
