@@ -1208,6 +1208,18 @@ toolbar .toolbarbutton-1:not(#back-button, #forward-button, #PanelUI-menu-button
 }
 }
 
+/*
+ * The compact address favicon is real page artwork, not a muted toolbar
+ * affordance. Keep only its slot and glyph fully painted when inactive.
+ */
+&#urlbar.safari-v8-moving.safari-v8-visible:-moz-window-inactive {
+#trust-icon-container,
+#trust-icon {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+}
+
 .urlbar-background {
   height: 36px !important;
   border: none !important;

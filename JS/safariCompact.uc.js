@@ -526,7 +526,7 @@
      * the close-hover state and its mask have been removed.
      */
     if (visible) {
-      scheduler.scheduleMicrotask(updateGlyph);
+      updateGlyph();
     }
   }
 
